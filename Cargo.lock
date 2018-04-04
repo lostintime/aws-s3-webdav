@@ -1,0 +1,4 @@
+[[package]]
+name = "rocket-aws-s3-proxy"
+version = "0.1.0"
+

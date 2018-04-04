@@ -1,0 +1,6 @@
+[package]
+name = "rocket-aws-s3-proxy"
+version = "0.1.0"
+authors = ["lostintime <lostintime.dev@gmail.com>"]
+
+[dependencies]
