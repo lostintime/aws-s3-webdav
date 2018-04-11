@@ -165,7 +165,7 @@ pub fn put_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, E
   let state = req.state().clone();
   
   let f1: Box<Future<Item=HttpResponse, Error=Error>> = Box::new(
-    create_upload(state.clone(), bucket, key)
+    create_upload(req.state().clone(), bucket, key)
       .map_err(|e| match e {
         CreateMultipartUploadError::HttpDispatch(e) => ErrorInternalServerError(e),
         CreateMultipartUploadError::Credentials(e) => ErrorForbidden(e),
@@ -174,21 +174,37 @@ pub fn put_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, E
       })
       .and_then(move |upload| {
         upload_parts(req, &upload)
-          .map_err(|e| match e {
-            UploadPartError::HttpDispatch(e) => ErrorInternalServerError(e),
-            UploadPartError::Credentials(e) => ErrorForbidden(e),
-            UploadPartError::Validation(e) => ErrorBadRequest(e),
-            UploadPartError::Unknown(e) => ErrorInternalServerError(e),
-          })
-          .and_then(move |parts| {
-            println!("Complete upload! {:?}", parts);
-            complete_upload(state, &upload, parts)
-              .map_err(|e| match e {
-                CompleteMultipartUploadError::HttpDispatch(e) => ErrorInternalServerError(e),
-                CompleteMultipartUploadError::Credentials(e) => ErrorForbidden(e),
-                CompleteMultipartUploadError::Validation(e) => ErrorBadRequest(e),
-                CompleteMultipartUploadError::Unknown(e) => ErrorInternalServerError(e),
-              })
+          .then(move |parts_r| match parts_r {
+            Ok(parts) => {
+              let c: Box<Future<Item = HttpResponse, Error = Error>> = Box::new(
+                complete_upload(state, &upload, parts)
+                  .map(|_| HttpResponse::Ok().finish())
+                  .map_err(|e| match e {
+                    CompleteMultipartUploadError::HttpDispatch(e) => ErrorInternalServerError(e),
+                    CompleteMultipartUploadError::Credentials(e) => ErrorForbidden(e),
+                    CompleteMultipartUploadError::Validation(e) => ErrorBadRequest(e),
+                    CompleteMultipartUploadError::Unknown(e) => ErrorInternalServerError(e),
+                  })
+              );
+
+              c
+            },
+            Err(e) => {
+              let c: Box<Future<Item = HttpResponse, Error = Error>> = Box::new(
+                abort_upload(state, &upload)
+                  .map(|_| HttpResponse::Ok().finish())
+                  .then(|_|
+                    Err(match e {
+                      UploadPartError::HttpDispatch(e) => ErrorInternalServerError(e),
+                      UploadPartError::Credentials(e) => ErrorForbidden(e),
+                      UploadPartError::Validation(e) => ErrorBadRequest(e),
+                      UploadPartError::Unknown(e) => ErrorInternalServerError(e),
+                    })
+                  )
+              );
+
+              c
+            }
           })
       })
       .map(|_| HttpResponse::Ok().finish())
