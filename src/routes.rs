@@ -69,7 +69,6 @@ pub fn head_object(req: HttpRequest<AppState>) -> Box<Future<Item = HttpResponse
 
 
 fn parts_stream(req: HttpRequest<AppState>) -> (Box<Stream<Item=(i64, Vec<u8>), Error=Error>>, HttpRequest<AppState>) {
-  
   let z: Box<Stream<Item=(i64, Vec<u8>), Error=Error>> = Box::new(
     stream_utils::numbers(1)
       .map_err(|e| ErrorInternalServerError(e))
@@ -82,11 +81,6 @@ fn parts_stream(req: HttpRequest<AppState>) -> (Box<Stream<Item=(i64, Vec<u8>), 
       })
   );
 
-  // (Box::new(stream::once(Ok((1, vec![])))), req)
-  let mut data: Vec<u8> = Vec::new();
-  data.extend_from_slice("Hello world".as_bytes());
-
-  // (Box::new(stream::once(Ok((1, data)))), req)
   (z, req)
 }
 
@@ -110,22 +104,21 @@ fn upload_parts(req: HttpRequest<AppState>, upload: &CreateMultipartUploadOutput
 
   Box::new(
     stream
-      .map_err(|_| UploadPartError::Unknown("Something went wrong".to_owned()))
+      .map_err(|_| UploadPartError::Unknown("Something went wrong with HttpRequest stream".to_owned()))
       .fold((req, vec![]), move |(req, mut parts), (part_number, data)| -> Box<future::Future<Item=(HttpRequest<AppState>, Vec<CompletedPart>), Error=UploadPartError>> {
-        let nr = part_number.to_owned();
         Box::new(
           req.state().s3.upload_part(&UploadPartRequest {
             bucket: bucket.to_owned(),
             key: key.to_owned(),
             upload_id: upload_id.to_owned(),
-            part_number: nr,
+            part_number: part_number.to_owned(),
             body: Some(data),
             ..UploadPartRequest::default()
           })
           .map(move |output| {
             parts.push(CompletedPart {
               e_tag: output.e_tag,
-              part_number: Some(nr)
+              part_number: Some(part_number)
             });
 
             (req, parts)
