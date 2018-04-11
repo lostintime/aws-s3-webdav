@@ -15,8 +15,9 @@ extern crate rocket_aws_s3_proxy;
 mod routes;
 mod env;
 
-use actix_web::{App, http, server };
+use actix_web::{App, http, server};
 use rusoto_core::{Region};
+use std::sync::{Arc};
 
 fn main() {
     env_logger::init().unwrap();
@@ -88,6 +89,7 @@ fn main() {
         let args = matches.clone();
 
         let aws_region_name = args.value_of("aws_region").expect("AWS Region argument required").to_owned();
+        
         let config = env::AppConfig {
             aws: env::AwsConfig::new(
                 &args.value_of("aws_config").expect("AWS Config path argument required").to_owned(),
@@ -103,9 +105,16 @@ fn main() {
             ),
         };
 
-        App::with_state(env::AppState::new(config))
-            .default_resource(|r| {
+        let state = env::AppState::new(config);
+
+        App::with_state(Arc::new(state))
+            .default_resource(move |r| {
                 info!("default_resource lambda");
+                
+                r.get().f(|req| {
+                    routes::do_something(req)
+                });
+
                 r.method(http::Method::GET).f(routes::get_object);
                 r.method(http::Method::HEAD).f(routes::head_object);
                 r.method(http::Method::PUT).f(routes::put_object);
