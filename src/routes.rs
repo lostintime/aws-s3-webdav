@@ -147,6 +147,17 @@ fn complete_upload(env: AppEnv, upload: &CreateMultipartUploadOutput, parts: Vec
   )
 }
 
+fn abort_upload(env: AppEnv, upload: &CreateMultipartUploadOutput) -> Box<Future<Item = AbortMultipartUploadOutput, Error =AbortMultipartUploadError>> {
+  Box::new(env.s3
+    .abort_multipart_upload(&AbortMultipartUploadRequest {
+      bucket: upload.bucket.to_owned().unwrap(),
+      key: upload.key.to_owned().unwrap(),
+      request_payer: None,
+      upload_id: upload.upload_id.to_owned().unwrap(),
+    })
+  )
+}
+
 pub fn put_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
   let bucket = extract_bucket(&req);
   let key = extract_object_key(&req);
