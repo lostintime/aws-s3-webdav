@@ -11,64 +11,11 @@ extern crate rusoto_credential;
 extern crate rusoto_s3;
 extern crate toml;
 
-use actix::prelude::*;
-use actix_web::{client, Application, AsyncResponder, Body, Error, HttpMessage, HttpRequest,
-                HttpResponse, HttpServer, Method, StatusCode, error::ErrorInternalServerError,
-                error::ErrorNotFound};
-use rusoto_core::Region;
-use rusoto_s3::*;
-use futures::prelude::*;
-use futures::{Future, Stream};
-use bytes::Bytes;
+mod routes;
+mod env;
 
-struct S3Config {
-    bucket: String,
-}
-
-impl S3Config {
-    fn new<B>(bucket: B) -> S3Config
-    where
-        B: Into<String>,
-    {
-        return S3Config {
-            bucket: bucket.into(),
-        };
-    }
-}
-
-struct AppConfig {
-    s3: S3Config,
-}
-
-/// Application State (environment)
-struct AppState {
-    s3: S3Client<rusoto_credential::ProfileProvider, rusoto_core::reactor::RequestDispatcher>,
-    config: AppConfig,
-}
-
-/// Get object from bucket
-fn get_object(req: HttpRequest<AppState>) -> Box<Future<Item = HttpResponse, Error = Error>> {
-    let r1: GetObjectRequest = GetObjectRequest {
-        bucket: String::from(req.state().config.s3.bucket.as_str()),
-        key: String::from(req.path().trim_left_matches("/")),
-        ..GetObjectRequest::default()
-    };
-
-    req.state()
-        .s3
-        .get_object(&r1)
-        .map_err(|e| ErrorInternalServerError(format!("{:?}", e)))
-        .map(|r| match r.body {
-            Some(body) => HttpResponse::new(
-                StatusCode::from_u16(200).expect("Failed to build status code"),
-                Body::Streaming(Box::new(body.map_err(|e| {
-                    ErrorInternalServerError("Something went wrong with body stream")
-                }).map(Bytes::from))),
-            ),
-            None => HttpResponse::from_error(ErrorNotFound("Object not found")),
-        })
-        .responder()
-}
+use actix_web::{Application, HttpServer, Method };
+use rusoto_core::{Region};
 
 fn main() {
     env_logger::init().unwrap();
@@ -99,6 +46,15 @@ fn main() {
                 .required(true)
         )
         .arg(
+            clap::Arg::with_name("aws_region")
+                .long("aws-region")
+                .value_name("REGION")
+                .env("AWS_REGION")
+                .help("AWS Region ID")
+                .takes_value(true)
+                .required(true)
+        )
+        .arg(
             clap::Arg::with_name("aws_config")
                 .long("aws-config")
                 .value_name("AWS_CONFIG")
@@ -114,7 +70,8 @@ fn main() {
                 .env("AWS_PROFILE")
                 .help("AWS Profile name in AWS_CONFIG")
                 .takes_value(true)
-                .required(true)
+                .default_value("default")
+                .required(false)
         )
         // TODO add argument for AWS key and secret
         .get_matches();
@@ -126,31 +83,35 @@ fn main() {
 
     // Start http server
     HttpServer::new(move || {
+        info!("Building application");
         let args = matches.clone();
 
-        let state = AppState {
-            s3: S3Client::new(
-                rusoto_core::reactor::RequestDispatcher::default(),
-                rusoto_credential::ProfileProvider::with_configuration(
-                    args.value_of("aws_config").expect("aws_config argument required"),
-                    args.value_of("aws_profile").expect("aws_profile argument required"),
-                ),
-                Region::EuCentral1,
+        let aws_region_name = args.value_of("aws_region").expect("AWS Region argument required").to_owned();
+        let config = env::AppConfig {
+            aws: env::AwsConfig::new(
+                &args.value_of("aws_config").expect("AWS Config path argument required").to_owned(),
+                &args.value_of("aws_profile").expect("AWS Profile name argument required").to_owned(),
+                &Region::Custom {
+                    name: aws_region_name.to_owned(),
+                    endpoint: format!("http://s3.{}.amazonaws.com", aws_region_name).to_owned()
+                }
             ),
-            config: AppConfig {
-                s3: S3Config::new(
-                    args.value_of("aws_bucket")
-                        .expect("AWS Bucket name argument required"),
-                ), //                s3: S3Config {
-                   //
-                   //                    bucket: String::from(
-                   //                        *(&)
-                   //                    )
-                   //                }
-            },
+            s3: env::S3Config::new(
+                args.value_of("aws_bucket")
+                    .expect("AWS Bucket name argument required"),
+            ),
         };
 
-        Application::with_state(state).default_resource(|r| r.method(Method::GET).f(get_object))
+        Application::with_state(env::AppState::new(config))
+            .default_resource(|r| {
+                info!("default_resource lambda");
+                r.method(Method::GET).f(routes::get_object);
+                r.method(Method::HEAD).f(routes::head_object);
+                r.method(Method::PUT).f(routes::put_object);
+                r.method(Method::DELETE).f(routes::delete_object);
+                r.method(Method::from_bytes(b"COPY").unwrap()).f(routes::copy_object);
+                r.method(Method::from_bytes(b"MOVE").unwrap()).f(routes::move_object);
+            })
     }).bind(&bind_port)
         .expect(&format!("Cannot bind to {}", &bind_port))
         .run();

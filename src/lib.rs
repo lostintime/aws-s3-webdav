@@ -65,7 +65,7 @@ mod utils {
                         name: String::from("Hello"),
                     },
                     Named::new("Hello")
-                )
+                );
             }
         }
     }

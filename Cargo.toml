@@ -17,3 +17,6 @@ rusoto_s3 = "0.32.0"
 rusoto_credential = "0.11.0"
 futures = "0.1.21"
 bytes = "0.4"
+
+[profile.release]
+debug = true
