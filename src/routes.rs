@@ -101,23 +101,23 @@ fn create_upload(req: &HttpRequest<AppState>, bucket: String, key: String) -> Bo
   )
 }
 
-fn upload_parts(req: HttpRequest<AppState>, upload: CreateMultipartUploadOutput) -> Box<Future<Item=(HttpRequest<AppState>, CreateMultipartUploadOutput, Vec<CompletedPart>), Error=UploadPartError>> {
+fn upload_parts(req: HttpRequest<AppState>, upload: &CreateMultipartUploadOutput) -> Box<Future<Item=(HttpRequest<AppState>, Vec<CompletedPart>), Error=UploadPartError>> {
   let (stream, req) = parts_stream(req);
 
-  Box::new(  
+  let bucket: String = upload.bucket.to_owned().unwrap();
+  let key: String = upload.key.to_owned().unwrap();
+  let upload_id: String = upload.upload_id.to_owned().unwrap();
+
+  Box::new(
     stream
       .map_err(|_| UploadPartError::Unknown("Something went wrong".to_owned()))
-      .fold((req, upload, vec![]), |(req, upload, mut parts), (part_number, data)| -> Box<future::Future<Item=(HttpRequest<AppState>, CreateMultipartUploadOutput, Vec<CompletedPart>), Error=UploadPartError>> {
-        let bucket: String = upload.bucket.to_owned().unwrap();
-        let key: String = upload.key.to_owned().unwrap();
-        let upload_id: String = upload.upload_id.to_owned().unwrap();
-
+      .fold((req, vec![]), move |(req, mut parts), (part_number, data)| -> Box<future::Future<Item=(HttpRequest<AppState>, Vec<CompletedPart>), Error=UploadPartError>> {
         let nr = part_number.to_owned();
         Box::new(
           req.state().s3.upload_part(&UploadPartRequest {
-            bucket: bucket,
-            key: key,
-            upload_id: upload_id,
+            bucket: bucket.to_owned(),
+            key: key.to_owned(),
+            upload_id: upload_id.to_owned(),
             part_number: nr,
             body: Some(data),
             ..UploadPartRequest::default()
@@ -128,25 +128,24 @@ fn upload_parts(req: HttpRequest<AppState>, upload: CreateMultipartUploadOutput)
               part_number: Some(nr)
             });
 
-            (req, upload, parts)
+            (req, parts)
           })
         )
       })
   )
 }
 
-fn complete_upload(req: HttpRequest<AppState>, upload: CreateMultipartUploadOutput, parts: Vec<CompletedPart>) -> Box<Future<Item=(CompleteMultipartUploadOutput, HttpRequest<AppState>), Error=CompleteMultipartUploadError>> {
+fn complete_upload(req: &HttpRequest<AppState>, upload: &CreateMultipartUploadOutput, parts: Vec<CompletedPart>) -> Box<Future<Item=CompleteMultipartUploadOutput, Error=CompleteMultipartUploadError>> {
   Box::new(req.state().s3
     .complete_multipart_upload(&CompleteMultipartUploadRequest {
-      bucket: upload.bucket.unwrap(),
-      key: upload.key.unwrap(),
+      bucket: upload.bucket.to_owned().unwrap(),
+      key: upload.key.to_owned().unwrap(),
       multipart_upload: Some(CompletedMultipartUpload {
         parts: Some(parts)
       }),
       request_payer: None,
-      upload_id: upload.upload_id.unwrap(),
+      upload_id: upload.upload_id.to_owned().unwrap(),
     })
-    .map(|output| (output, req))
   )
 }
 
@@ -163,16 +162,16 @@ pub fn put_object(req: HttpRequest<AppState>) -> Box<Future<Item = HttpResponse,
         CreateMultipartUploadError::Unknown(e) => ErrorInternalServerError(e),
       })
       .and_then(move |upload| {
-        upload_parts(req, upload)
+        upload_parts(req, &upload)
           .map_err(|e| match e {
             UploadPartError::HttpDispatch(e) => ErrorInternalServerError(e),
             UploadPartError::Credentials(e) => ErrorForbidden(e),
             UploadPartError::Validation(e) => ErrorBadRequest(e),
             UploadPartError::Unknown(e) => ErrorInternalServerError(e),
           })
-          .and_then(|(req, upload, parts)| {
+          .and_then(move |(req, parts)| {
             println!("Complete upload! {:?}", parts);
-            complete_upload(req, upload, parts)
+            complete_upload(&req, &upload, parts)
               .map_err(|e| match e {
                 CompleteMultipartUploadError::HttpDispatch(e) => ErrorInternalServerError(e),
                 CompleteMultipartUploadError::Credentials(e) => ErrorForbidden(e),
