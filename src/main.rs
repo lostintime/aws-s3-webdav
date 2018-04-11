@@ -110,10 +110,6 @@ fn main() {
         App::with_state(Arc::new(state))
             .default_resource(move |r| {
                 info!("default_resource lambda");
-                
-                r.get().f(|req| {
-                    routes::do_something(req)
-                });
 
                 r.method(http::Method::GET).f(routes::get_object);
                 r.method(http::Method::HEAD).f(routes::head_object);

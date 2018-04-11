@@ -1,14 +1,12 @@
 use actix_web::{
-  AsyncResponder, Body, Error, HttpRequest, HttpResponse, HttpMessage, http::StatusCode,
+  AsyncResponder, Error, HttpRequest, HttpResponse,
   error::ErrorInternalServerError, error::ErrorNotFound, error::ErrorForbidden,
-  error::ErrorBadRequest, error::PayloadError, Responder
+  error::ErrorBadRequest
 };
 use rusoto_s3::*;
-use futures::{Future, Stream, future, stream };
+use futures::{Future, Stream, future};
 use bytes::Bytes;
 use env::*;
-use rusoto_credential;
-use rusoto_core;
 use rocket_aws_s3_proxy::stream_utils;
 use std::sync::Arc;
 
@@ -39,12 +37,14 @@ pub fn get_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, E
       GetObjectError::Unknown(e) => ErrorInternalServerError(e),
     })
     .map(|r| match r.body {
-      Some(body) => HttpResponse::Ok().streaming(
+      Some(body) => {
+        HttpResponse::Ok().streaming(
           Box::new(
             body.map_err(|_e| ErrorInternalServerError("Something went wrong with body stream"))
               .map(Bytes::from)
           )
-        ),
+        )
+      },
       None => HttpResponse::from_error(ErrorNotFound("Object Not Found")),
     })
     .responder()
@@ -66,25 +66,8 @@ pub fn head_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, 
       HeadObjectError::Validation(e) => ErrorBadRequest(e),
       HeadObjectError::Unknown(e) => ErrorInternalServerError(e),
     })
-    .map(|_r| HttpResponse::Ok().finish())
+    .map(|_| HttpResponse::Ok().finish())
     .responder()
-}
-
-
-fn parts_stream(req: HttpRequest<AppEnv>) -> (Box<Stream<Item=(i64, Vec<u8>), Error=Error>>, HttpRequest<AppEnv>) {
-  let z: Box<Stream<Item=(i64, Vec<u8>), Error=Error>> = Box::new(
-    stream_utils::numbers(1)
-      .map_err(|e| ErrorInternalServerError(e))
-      .zip(
-        req.to_owned() // FIXME - avoid request copy!!!
-          .map_err(|e| ErrorInternalServerError("Something went wrong while reading request stream"))
-      )
-      .map(|(n, b)| -> (i64, Vec<u8>) {
-        (n, b.to_vec())
-      })
-  );
-
-  (z, req)
 }
 
 fn create_upload(env: AppEnv, bucket: String, key: String) -> Box<Future<Item=CreateMultipartUploadOutput, Error=CreateMultipartUploadError>> {
@@ -99,16 +82,22 @@ fn create_upload(env: AppEnv, bucket: String, key: String) -> Box<Future<Item=Cr
 }
 
 fn upload_parts(req: HttpRequest<AppEnv>, upload: &CreateMultipartUploadOutput) -> Box<Future<Item=Vec<CompletedPart>, Error=UploadPartError>> {
-  let (stream, req) = parts_stream(req);
+  let state = req.state().clone();
 
   let bucket: String = upload.bucket.to_owned().unwrap();
   let key: String = upload.key.to_owned().unwrap();
   let upload_id: String = upload.upload_id.to_owned().unwrap();
 
-  let state = req.state().clone();
-
   Box::new(
-    stream
+    stream_utils::numbers(1)
+      .map_err(|e| ErrorInternalServerError(e))
+      .zip(
+        req
+          .map_err(|_e| ErrorInternalServerError("Something went wrong while reading request stream"))
+      )
+      .map(|(n, b)| -> (i64, Vec<u8>) {
+        (n, b.to_vec())
+      })
       .map_err(|_| UploadPartError::Unknown("Something went wrong with HttpRequest stream".to_owned()))
       .fold(vec![], move |mut parts, (part_number, data)| -> Box<future::Future<Item=Vec<CompletedPart>, Error=UploadPartError>> {
         Box::new(
@@ -231,28 +220,73 @@ pub fn delete_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse
     .responder()
 }
 
-pub fn copy_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
-  future::ok(HttpResponse::Ok().finish())
-  .responder()
+enum DestinationHeaderError {
+  Missing,
+  Invalid,
+}
+
+fn extract_destination_header(req: &mut HttpRequest<AppEnv>) -> Result<String, DestinationHeaderError> {
+  match req.headers_mut().get("destination") {
+    Some(destination) => match destination.to_str() {
+      Ok(dest) => Ok(dest.trim_left_matches("/").to_owned()),
+      Err(_) => Err(DestinationHeaderError::Invalid)
+    },
+    None => Err(DestinationHeaderError::Missing)
+  }
+}
+
+pub fn copy_object(mut req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
+  let state = req.state().clone();
+  let bucket = extract_bucket(&req);
+  let source_key = extract_object_key(&req);
+
+  match extract_destination_header(&mut req) {
+    Ok(dest) => {
+      state.s3
+        .copy_object(&CopyObjectRequest {
+            bucket: bucket.clone(),
+            copy_source: format!("{}/{}", bucket, source_key),
+            key: dest,
+            ..CopyObjectRequest::default()
+        })
+        .map_err(|e| match e {
+          // http://rusoto.github.io/rusoto/rusoto_s3/enum.CopyObjectError.html
+          CopyObjectError::HttpDispatch(e) => ErrorInternalServerError(e),
+          CopyObjectError::Credentials(e) => ErrorForbidden(e),
+          CopyObjectError::Validation(e) => ErrorBadRequest(e),
+          CopyObjectError::ObjectNotInActiveTierError(e) => ErrorForbidden(e),
+          CopyObjectError::Unknown(e) => ErrorInternalServerError(e),
+        })
+        .map(|_| HttpResponse::Ok().finish())
+        .responder()
+    },
+    Err(_) => Box::new(
+      future::err(ErrorBadRequest("Invalid Destination header"))
+    )      
+  }
 }
 
 pub fn move_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
-  future::ok(HttpResponse::Ok().finish())
-  .responder()
-}
-
-pub fn do_something(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
   let state = req.state().clone();
+  let bucket = extract_bucket(&req);
+  let source_key = extract_object_key(&req);
 
-  req
-    .fold(0usize, move |cnt: usize, data: Bytes| {
-      let len: Result<usize, PayloadError> = Ok(cnt + data.len());
-
-      future::result(len)
-    })
-    .then(|r| match r {
-      Ok(s) => Ok(HttpResponse::Ok().finish()),
-      Err(e) => Err(ErrorInternalServerError("Something went wrong!"))
+  copy_object(req)
+    .and_then(move |_| {
+      state.s3
+        .delete_object(&DeleteObjectRequest {
+            bucket: bucket,
+            key: source_key,
+            ..DeleteObjectRequest::default()
+        })
+        .map_err(|e| match e {
+          // http://rusoto.github.io/rusoto/rusoto_s3/enum.DeleteObjectError.html
+          DeleteObjectError::HttpDispatch(e) => ErrorInternalServerError(e),
+          DeleteObjectError::Credentials(e) => ErrorForbidden(e),
+          DeleteObjectError::Validation(e) => ErrorBadRequest(e),
+          DeleteObjectError::Unknown(e) => ErrorInternalServerError(e),
+        })
+        .map(|_| HttpResponse::Ok().finish())
     })
     .responder()
 }
