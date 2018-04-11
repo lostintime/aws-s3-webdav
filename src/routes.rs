@@ -9,6 +9,7 @@ use bytes::Bytes;
 use env::*;
 use rusoto_credential;
 use rusoto_core;
+use rocket_aws_s3_proxy::stream_utils;
 
 fn extract_bucket(req: &HttpRequest<AppState>) -> String {
   String::from(req.state().config.s3.bucket.as_str())
@@ -68,11 +69,25 @@ pub fn head_object(req: HttpRequest<AppState>) -> Box<Future<Item = HttpResponse
 
 
 fn parts_stream(req: HttpRequest<AppState>) -> (Box<Stream<Item=(i64, Vec<u8>), Error=Error>>, HttpRequest<AppState>) {
+  
+  let z: Box<Stream<Item=(i64, Vec<u8>), Error=Error>> = Box::new(
+    stream_utils::numbers(1)
+      .map_err(|e| ErrorInternalServerError(e))
+      .zip(
+        req.to_owned() // FIXME - avoid request copy!!!
+          .map_err(|e| ErrorInternalServerError("Something went wrong while reading request stream"))
+      )
+      .map(|(n, b)| -> (i64, Vec<u8>) {
+        (n, b.to_vec())
+      })
+  );
+
   // (Box::new(stream::once(Ok((1, vec![])))), req)
   let mut data: Vec<u8> = Vec::new();
   data.extend_from_slice("Hello world".as_bytes());
 
-  (Box::new(stream::once(Ok((1, data)))), req)
+  // (Box::new(stream::once(Ok((1, data)))), req)
+  (z, req)
 }
 
 fn create_upload(req: HttpRequest<AppState>, bucket: String, key: String) -> Box<Future<Item=(CreateMultipartUploadOutput, HttpRequest<AppState>), Error=CreateMultipartUploadError>> {
@@ -135,6 +150,7 @@ fn complete_upload(req: HttpRequest<AppState>, upload: CreateMultipartUploadOutp
     .map(|output| (output, req))
   )
 }
+
 
 pub fn put_object(req: HttpRequest<AppState>) -> Box<Future<Item = HttpResponse, Error = Error>> {
   let bucket = extract_bucket(&req);

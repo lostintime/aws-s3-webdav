@@ -1,71 +1,47 @@
-mod utils {
-    /**
-     * Finds largest element of type T from the given list
-     */
-    fn largest<T>(list: &[T]) -> Option<T>
-    where
-        T: PartialOrd + Copy,
-    {
-        let mut max: Option<T> = None;
+extern crate futures;
 
-        for v in list.iter() {
-            match max {
-                Some(m) => {
-                    if v > &m {
-                        max = Some(*v)
-                    }
-                }
-                None => max = Some(*v),
-            }
-        }
+pub mod stream_utils {
+    use futures::{Future, Stream, Async, future, stream };
 
-        max
+    pub fn numbers(from: i64) -> Box<Stream<Item=i64, Error=String>> {
+        let mut counter = from;
+        
+        Box::new(stream::poll_fn(move || {
+            let next = counter;
+            counter += 1;
+
+            Ok(Async::Ready(Some(next)))
+        }))
     }
 
-    #[derive(Debug)]
-    struct Named {
-        name: String,
-    }
+    // fn numbered<T, E>(s: Box<Stream<Item=T, Error=E>) -> Box<Stream(Item=(i64, T), Error=E) {
 
-    impl Named {
-        fn new(name: &str) -> Named {
-            Named {
-                name: String::from(name),
-            }
-        }
-    }
+    // }
 
-    impl PartialEq for Named {
-        fn eq(&self, other: &Named) -> bool {
-            self.name == other.name
-        }
-    }
+    // fn split_stream<T, E>(s: Box<Stream<Item=T, Error=E>) -> Box<Stream<Item=(i64, Vec<T>), Error=E>> {
+
+    // }
 
     #[cfg(test)]
     mod tests {
-        mod utils {
-            use utils::*;
-            /**
-             * Testing utils::largest() function
-             */
+        mod stream_utils {
+            use stream_utils::*;
+            
             #[test]
-            fn largest_test() {
-                assert_eq!(Some(8), largest(&vec![1, 4, 3, 8]))
+            fn test_numbers() {
+                let n = numbers(0);
+
+                let v: Vec<i64> = n.take(5).collect().wait().unwrap();
+                assert_eq!(v, vec![0,1,2,3,4]);
             }
 
             #[test]
-            fn build_named() {
-                assert_eq!(
-                    String::from("John"),
-                    Named::new("John").name,
-                    ".name field is different when Named instance created via new() method"
-                );
-                assert_eq!(
-                    Named {
-                        name: String::from("Hello"),
-                    },
-                    Named::new("Hello")
-                );
+            fn test_zip() {
+                let a = numbers(0);
+                let b = numbers(10);
+                let v: Vec<(i64, i64)> = a.take(2).zip(b.take(5)).collect().wait().unwrap();
+
+                assert_eq!(v, vec![(0, 10), (1, 11)]);
             }
         }
     }
