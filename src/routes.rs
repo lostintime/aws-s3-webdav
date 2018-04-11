@@ -68,43 +68,11 @@ pub fn head_object(req: HttpRequest<AppState>) -> Box<Future<Item = HttpResponse
 
 
 fn parts_stream(req: HttpRequest<AppState>) -> (Box<Stream<Item=(i64, Vec<u8>), Error=Error>>, HttpRequest<AppState>) {
-  (Box::new(stream::empty()), req)
-}
+  // (Box::new(stream::once(Ok((1, vec![])))), req)
+  let mut data: Vec<u8> = Vec::new();
+  data.extend_from_slice("Hello world".as_bytes());
 
-fn upload_part(s3: Box<S3Client<rusoto_credential::ProfileProvider, rusoto_core::reactor::RequestDispatcher>>, 
-               upload: &CreateMultipartUploadOutput,
-               part_number: i64,
-               body: Option<Vec<u8>>) -> Box<Future<Item=UploadPartOutput, Error=UploadPartError>> {
-  match upload.bucket {
-    Some(ref bucket) => match upload.key {
-      Some(ref key) => match upload.upload_id {
-        Some(ref upload_id) => {
-          Box::new(
-            s3.upload_part(&UploadPartRequest {
-              bucket: bucket.clone(),
-              key: key.clone(),
-              upload_id: upload_id.clone(),
-              part_number: part_number,
-              body: body,
-              ..UploadPartRequest::default()
-            }))
-        },
-        None => Box::new(future::err(UploadPartError::Unknown(String::from("Got no upload_id value from CreateMultipartUploadOutput"))))
-      },
-      None => Box::new(future::err(UploadPartError::Unknown(String::from("Got no key value from CreateMultipartUploadOutput"))))
-    },
-    None => Box::new(future::err(UploadPartError::Unknown(String::from("Got no bucket value from CreateMultipartUploadOutput"))))
-  }
-}
-
-pub fn upload_stream(upload: &CreateMultipartUploadOutput,
-                     stream: Box<Stream<Item=(i64, Vec<u8>), Error=Error>>) -> Box<Future<Item = i64, Error = Error>> {
-  Box::new(
-    stream
-      .fold(0i64, |acc, t| -> future::FutureResult<i64, Error> {
-        future::ok(t.0) 
-      })
-  )
+  (Box::new(stream::once(Ok((1, data)))), req)
 }
 
 fn create_upload(req: HttpRequest<AppState>, bucket: String, key: String) -> Box<Future<Item=(CreateMultipartUploadOutput, HttpRequest<AppState>), Error=CreateMultipartUploadError>> {
@@ -119,33 +87,50 @@ fn create_upload(req: HttpRequest<AppState>, bucket: String, key: String) -> Box
   )
 }
 
-fn upload_parts(req: HttpRequest<AppState>, upload: CreateMultipartUploadOutput) -> Box<Future<Item=(CreateMultipartUploadOutput, HttpRequest<AppState>), Error=UploadPartError>> {
+fn upload_parts(req: HttpRequest<AppState>, upload: CreateMultipartUploadOutput) -> Box<Future<Item=(HttpRequest<AppState>, CreateMultipartUploadOutput, Vec<CompletedPart>), Error=UploadPartError>> {
   let (stream, req) = parts_stream(req);
-  
-  let bucket: String = upload.bucket.clone().unwrap();
-  let key: String = upload.key.clone().unwrap();
-  let upload_id: String = upload.upload_id.clone().unwrap();
 
-  Box::new(
-    req.state().s3.upload_part(&UploadPartRequest {
-      bucket: bucket,
-      key: key,
-      upload_id: upload_id,
-      part_number: 1,
-      body: Some(vec![]),
-      ..UploadPartRequest::default()
-    })
-    .map(|_| (upload, req))
+  Box::new(  
+    stream
+      .map_err(|_| UploadPartError::Unknown("Something went wrong".to_owned()))
+      .fold((req, upload, vec![]), |(req, upload, mut parts), (part_number, data)| -> Box<future::Future<Item=(HttpRequest<AppState>, CreateMultipartUploadOutput, Vec<CompletedPart>), Error=UploadPartError>> {
+        let bucket: String = upload.bucket.to_owned().unwrap();
+        let key: String = upload.key.to_owned().unwrap();
+        let upload_id: String = upload.upload_id.to_owned().unwrap();
+
+        let nr = part_number.to_owned();
+        Box::new(
+          req.state().s3.upload_part(&UploadPartRequest {
+            bucket: bucket,
+            key: key,
+            upload_id: upload_id,
+            part_number: nr,
+            body: Some(data),
+            ..UploadPartRequest::default()
+          })
+          .map(move |output| {
+            parts.push(CompletedPart {
+              e_tag: output.e_tag,
+              part_number: Some(nr)
+            });
+
+            (req, upload, parts)
+          })
+        )
+      })
   )
 }
 
-fn complete_upload(req: HttpRequest<AppState>, upload: CreateMultipartUploadOutput) -> Box<Future<Item=(CompleteMultipartUploadOutput, HttpRequest<AppState>), Error=CompleteMultipartUploadError>> {
+fn complete_upload(req: HttpRequest<AppState>, upload: CreateMultipartUploadOutput, parts: Vec<CompletedPart>) -> Box<Future<Item=(CompleteMultipartUploadOutput, HttpRequest<AppState>), Error=CompleteMultipartUploadError>> {
   Box::new(req.state().s3
     .complete_multipart_upload(&CompleteMultipartUploadRequest {
       bucket: upload.bucket.unwrap(),
       key: upload.key.unwrap(),
+      multipart_upload: Some(CompletedMultipartUpload {
+        parts: Some(parts)
+      }),
+      request_payer: None,
       upload_id: upload.upload_id.unwrap(),
-      ..CompleteMultipartUploadRequest::default()
     })
     .map(|output| (output, req))
   )
@@ -172,9 +157,9 @@ pub fn put_object(req: HttpRequest<AppState>) -> Box<Future<Item = HttpResponse,
             UploadPartError::Unknown(e) => ErrorInternalServerError(e),
           })
       })
-      .and_then(|(upload, req)| {
-        println!("Complete upload!");
-        complete_upload(req, upload)
+      .and_then(|(req, upload, parts)| {
+        println!("Complete upload! {:?}", parts);
+        complete_upload(req, upload, parts)
           .map_err(|e| match e {
             CompleteMultipartUploadError::HttpDispatch(e) => ErrorInternalServerError(e),
             CompleteMultipartUploadError::Credentials(e) => ErrorForbidden(e),
