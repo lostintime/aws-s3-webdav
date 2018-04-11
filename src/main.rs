@@ -14,7 +14,7 @@ extern crate toml;
 mod routes;
 mod env;
 
-use actix_web::{Application, HttpServer, Method };
+use actix_web::{App, http, server };
 use rusoto_core::{Region};
 
 fn main() {
@@ -82,7 +82,7 @@ fn main() {
     info!("Start server on {}", bind_port);
 
     // Start http server
-    HttpServer::new(move || {
+    server::HttpServer::new(move || {
         info!("Building application");
         let args = matches.clone();
 
@@ -102,15 +102,15 @@ fn main() {
             ),
         };
 
-        Application::with_state(env::AppState::new(config))
+        App::with_state(env::AppState::new(config))
             .default_resource(|r| {
                 info!("default_resource lambda");
-                r.method(Method::GET).f(routes::get_object);
-                r.method(Method::HEAD).f(routes::head_object);
-                r.method(Method::PUT).f(routes::put_object);
-                r.method(Method::DELETE).f(routes::delete_object);
-                r.method(Method::from_bytes(b"COPY").unwrap()).f(routes::copy_object);
-                r.method(Method::from_bytes(b"MOVE").unwrap()).f(routes::move_object);
+                r.method(http::Method::GET).f(routes::get_object);
+                r.method(http::Method::HEAD).f(routes::head_object);
+                r.method(http::Method::PUT).f(routes::put_object);
+                r.method(http::Method::DELETE).f(routes::delete_object);
+                r.method(http::Method::from_bytes(b"COPY").unwrap()).f(routes::copy_object);
+                r.method(http::Method::from_bytes(b"MOVE").unwrap()).f(routes::move_object);
             })
     }).bind(&bind_port)
         .expect(&format!("Cannot bind to {}", &bind_port))

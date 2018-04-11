@@ -1,5 +1,5 @@
 use actix_web::{
-  AsyncResponder, Body, Error, HttpRequest, HttpResponse, HttpMessage, StatusCode,
+  AsyncResponder, Body, Error, HttpRequest, HttpResponse, HttpMessage, http::StatusCode,
   error::ErrorInternalServerError, error::ErrorNotFound, error::ErrorForbidden,
   error::ErrorBadRequest, error::PayloadError
 };
@@ -35,13 +35,13 @@ pub fn get_object(req: HttpRequest<AppState>) -> Box<Future<Item = HttpResponse,
           GetObjectError::Unknown(e) => ErrorInternalServerError(e),
        })
        .map(|r| match r.body {
-           Some(body) => HttpResponse::new(
-               StatusCode::from_u16(200).unwrap(),
-               Body::Streaming(Box::new(body.map_err(|_e| {
-                   ErrorInternalServerError("Something went wrong with body stream")
-               }).map(Bytes::from))),
-           ),
-           None => HttpResponse::from_error(ErrorNotFound("Object Not Found")),
+          Some(body) => HttpResponse::Ok().streaming(
+              Box::new(
+                body.map_err(|_e| ErrorInternalServerError("Something went wrong with body stream"))
+                  .map(Bytes::from)
+              )
+            ),
+          None => HttpResponse::from_error(ErrorNotFound("Object Not Found")),
        })
        .responder()
 }
@@ -62,10 +62,7 @@ pub fn head_object(req: HttpRequest<AppState>) -> Box<Future<Item = HttpResponse
           HeadObjectError::Validation(e) => ErrorBadRequest(e),
           HeadObjectError::Unknown(e) => ErrorInternalServerError(e),
        })
-       .map(|_r| HttpResponse::new(
-          StatusCode::from_u16(200).unwrap(),
-          Body::Empty
-        ))
+       .map(|_r| HttpResponse::Ok().finish())
        .responder()
 }
 
@@ -185,10 +182,7 @@ pub fn put_object(req: HttpRequest<AppState>) -> Box<Future<Item = HttpResponse,
             CompleteMultipartUploadError::Unknown(e) => ErrorInternalServerError(e),
           })
       })
-      .map(|_| HttpResponse::new(
-        StatusCode::from_u16(200).unwrap(),
-        Body::Empty
-      ))
+      .map(|_| HttpResponse::Ok().finish())
   );
 
   f1
@@ -208,26 +202,17 @@ pub fn delete_object(req: HttpRequest<AppState>) -> Box<Future<Item = HttpRespon
       DeleteObjectError::Validation(e) => ErrorBadRequest(e),
       DeleteObjectError::Unknown(e) => ErrorInternalServerError(e),
     })
-    .map(|_| HttpResponse::new(
-      StatusCode::from_u16(200).unwrap(),
-      Body::Empty
-    ))
+    .map(|_| HttpResponse::Ok().finish())
     .responder()
 }
 
 pub fn copy_object(req: HttpRequest<AppState>) -> Box<Future<Item = HttpResponse, Error = Error>> {
-  future::ok(HttpResponse::new(
-    StatusCode::from_u16(200).expect("Failed to build status code"),
-    Body::Empty
-  ))
+  future::ok(HttpResponse::Ok().finish())
   .responder()
 }
 
 pub fn move_object(req: HttpRequest<AppState>) -> Box<Future<Item = HttpResponse, Error = Error>> {
-  future::ok(HttpResponse::new(
-    StatusCode::from_u16(200).expect("Failed to build status code"),
-    Body::Empty
-  ))
+  future::ok(HttpResponse::Ok().finish())
   .responder()
 }
 

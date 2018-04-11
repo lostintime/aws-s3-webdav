@@ -49,7 +49,6 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(config: AppConfig) -> AppState {
-        println!("http://s3.{}.amazonaws.com", config.aws.region);
         AppState {
             s3: Box::new(
                 S3Client::new(
