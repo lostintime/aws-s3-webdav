@@ -12,11 +12,11 @@ use rusoto_core;
 use rocket_aws_s3_proxy::stream_utils;
 
 fn extract_bucket(req: &HttpRequest<AppState>) -> String {
-  String::from(req.state().config.s3.bucket.as_str())
+  req.state().config.s3.bucket.as_str().to_owned()
 }
 
 fn extract_object_key(req: &HttpRequest<AppState>) -> String {
-  String::from(req.path().trim_left_matches("/"))
+  req.path().trim_left_matches("/").to_owned()
 }
 
 /// Get object from bucket
@@ -90,7 +90,7 @@ fn parts_stream(req: HttpRequest<AppState>) -> (Box<Stream<Item=(i64, Vec<u8>), 
   (z, req)
 }
 
-fn create_upload(req: HttpRequest<AppState>, bucket: String, key: String) -> Box<Future<Item=(CreateMultipartUploadOutput, HttpRequest<AppState>), Error=CreateMultipartUploadError>> {
+fn create_upload(req: &HttpRequest<AppState>, bucket: String, key: String) -> Box<Future<Item=CreateMultipartUploadOutput, Error=CreateMultipartUploadError>> {
   Box::new(
     req.state().s3
       .create_multipart_upload(&CreateMultipartUploadRequest {
@@ -98,7 +98,6 @@ fn create_upload(req: HttpRequest<AppState>, bucket: String, key: String) -> Box
         key: key,
         ..CreateMultipartUploadRequest::default()
       })
-      .map(|output| (output, req))
   )
 }
 
@@ -151,20 +150,19 @@ fn complete_upload(req: HttpRequest<AppState>, upload: CreateMultipartUploadOutp
   )
 }
 
-
 pub fn put_object(req: HttpRequest<AppState>) -> Box<Future<Item = HttpResponse, Error = Error>> {
   let bucket = extract_bucket(&req);
   let key = extract_object_key(&req);
   
   let f1: Box<Future<Item=HttpResponse, Error=Error>> = Box::new(
-    create_upload(req, bucket, key)
+    create_upload(&req, bucket, key)
       .map_err(|e| match e {
         CreateMultipartUploadError::HttpDispatch(e) => ErrorInternalServerError(e),
         CreateMultipartUploadError::Credentials(e) => ErrorForbidden(e),
         CreateMultipartUploadError::Validation(e) => ErrorBadRequest(e),
         CreateMultipartUploadError::Unknown(e) => ErrorInternalServerError(e),
       })
-      .and_then(|(upload, req)| {
+      .and_then(move |upload| {
         upload_parts(req, upload)
           .map_err(|e| match e {
             UploadPartError::HttpDispatch(e) => ErrorInternalServerError(e),
@@ -172,15 +170,15 @@ pub fn put_object(req: HttpRequest<AppState>) -> Box<Future<Item = HttpResponse,
             UploadPartError::Validation(e) => ErrorBadRequest(e),
             UploadPartError::Unknown(e) => ErrorInternalServerError(e),
           })
-      })
-      .and_then(|(req, upload, parts)| {
-        println!("Complete upload! {:?}", parts);
-        complete_upload(req, upload, parts)
-          .map_err(|e| match e {
-            CompleteMultipartUploadError::HttpDispatch(e) => ErrorInternalServerError(e),
-            CompleteMultipartUploadError::Credentials(e) => ErrorForbidden(e),
-            CompleteMultipartUploadError::Validation(e) => ErrorBadRequest(e),
-            CompleteMultipartUploadError::Unknown(e) => ErrorInternalServerError(e),
+          .and_then(|(req, upload, parts)| {
+            println!("Complete upload! {:?}", parts);
+            complete_upload(req, upload, parts)
+              .map_err(|e| match e {
+                CompleteMultipartUploadError::HttpDispatch(e) => ErrorInternalServerError(e),
+                CompleteMultipartUploadError::Credentials(e) => ErrorForbidden(e),
+                CompleteMultipartUploadError::Validation(e) => ErrorBadRequest(e),
+                CompleteMultipartUploadError::Unknown(e) => ErrorInternalServerError(e),
+              })
           })
       })
       .map(|_| HttpResponse::Ok().finish())
