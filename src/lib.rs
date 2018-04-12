@@ -1,7 +1,7 @@
 extern crate futures;
 
 pub mod stream_utils {
-    use futures::{Future, Stream, Async, stream };
+    use futures::{Stream, Async, stream};
 
     pub fn numbers(from: i64) -> Box<Stream<Item=i64, Error=String>> {
         let mut counter = from;
@@ -17,6 +17,7 @@ pub mod stream_utils {
     #[cfg(test)]
     mod tests {
         mod stream_utils {
+            use futures::{Future};
             use stream_utils::*;
             
             #[test]

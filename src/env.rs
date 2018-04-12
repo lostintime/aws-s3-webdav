@@ -45,26 +45,24 @@ type MyS3Client = S3Client<rusoto_credential::ProfileProvider, rusoto_core::reac
 
 /// Application State (environment)
 pub struct AppState {
-    pub s3: Box<MyS3Client>,
+    pub s3: MyS3Client,
     pub config: AppConfig,
 }
 
 impl AppState {
     pub fn new(config: AppConfig) -> AppState {
         AppState {
-            s3: Box::new(
-                S3Client::new(
-                    rusoto_core::reactor::RequestDispatcher::default(),
-                    rusoto_credential::ProfileProvider::with_configuration(
-                        config.aws.profile_path.clone(),
-                        config.aws.profile_name.clone(),
-                    ),
-                    config.aws.region.clone(),
-                    // Region::Custom {
-                    //     name: config.s3.bucket.clone(),
-                    //     endpoint: format!("http://s3.{}.amazonaws.com", config.s3.bucket).to_owned()
-                    // }
-                )
+            s3: S3Client::new(
+                rusoto_core::reactor::RequestDispatcher::default(),
+                rusoto_credential::ProfileProvider::with_configuration(
+                    config.aws.profile_path.clone(),
+                    config.aws.profile_name.clone(),
+                ),
+                config.aws.region.clone(),
+                // Region::Custom {
+                //     name: config.s3.bucket.clone(),
+                //     endpoint: format!("http://s3.{}.amazonaws.com", config.s3.bucket).to_owned()
+                // }
             ),
             config: config
         }
