@@ -1,7 +1,7 @@
 extern crate futures;
 
 pub mod stream_utils {
-    use futures::{Future, Stream, Async, future, stream };
+    use futures::{Stream, Async, stream };
 
     pub fn numbers(from: i64) -> Box<Stream<Item=i64, Error=String>> {
         let mut counter = from;
@@ -13,14 +13,6 @@ pub mod stream_utils {
             Ok(Async::Ready(Some(next)))
         }))
     }
-
-    // fn numbered<T, E>(s: Box<Stream<Item=T, Error=E>) -> Box<Stream(Item=(i64, T), Error=E) {
-
-    // }
-
-    // fn split_stream<T, E>(s: Box<Stream<Item=T, Error=E>) -> Box<Stream<Item=(i64, Vec<T>), Error=E>> {
-
-    // }
 
     #[cfg(test)]
     mod tests {
