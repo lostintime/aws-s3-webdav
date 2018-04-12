@@ -21,9 +21,9 @@ impl AwsConfig {
 
 pub struct AwsBucket(String);
 
-impl Into<String> for AwsBucket {
-    fn into(self) -> String {
-        self.0
+impl <'a> From<&'a AwsBucket> for String {
+    fn from(bucket: &AwsBucket) -> String {
+        bucket.0.to_owned()
     }
 }
 
@@ -37,9 +37,9 @@ impl AwsPrefix {
     }
 }
 
-impl Into<String> for AwsPrefix {
-    fn into(self) -> String {
-        self.0
+impl <'a> From<&'a AwsPrefix> for String {
+    fn from(prefix: &AwsPrefix) -> String {
+        prefix.0.to_owned()
     }
 }
 
