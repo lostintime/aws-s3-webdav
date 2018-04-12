@@ -59,10 +59,6 @@ impl AppState {
                     config.aws.profile_name.clone(),
                 ),
                 config.aws.region.clone(),
-                // Region::Custom {
-                //     name: config.s3.bucket.clone(),
-                //     endpoint: format!("http://s3.{}.amazonaws.com", config.s3.bucket).to_owned()
-                // }
             ),
             config: config
         }
