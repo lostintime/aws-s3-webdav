@@ -1,0 +1,11 @@
+# Build using this image: https://hub.docker.com/r/ekidd/rust-musl-builder/
+FROM alpine:3.7
+
+# install openssl
+RUN apk update && apk add openssl
+
+COPY target/x86_64-unknown-linux-musl/release/rocket_aws_s3_proxy /usr/bin/rocket_aws_s3_proxy
+
+EXPOSE 8080
+
+ENTRYPOINT [ "/usr/bin/rocket_aws_s3_proxy" ]
