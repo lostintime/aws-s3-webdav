@@ -19,17 +19,43 @@ impl AwsConfig {
     }
 }
 
+pub struct AwsBucket(String);
+
+impl Into<String> for AwsBucket {
+    fn into(self) -> String {
+        self.0
+    }
+}
+
+pub struct AwsPrefix(String);
+
+pub struct InvalidAwsPrefix(String);
+
+impl AwsPrefix {
+    fn parse(_s: String) -> Result<AwsPrefix, InvalidAwsPrefix> {
+        return Ok(AwsPrefix(String::from("")))
+    }
+}
+
+impl Into<String> for AwsPrefix {
+    fn into(self) -> String {
+        self.0
+    }
+}
+
 pub struct S3Config {
     pub bucket: String,
+    pub prefix: Option<AwsPrefix>,
 }
 
 impl S3Config {
-    pub fn new<B>(bucket: B) -> S3Config
+    pub fn new<B>(bucket: B, prefix: Option<B>) -> S3Config
     where
         B: Into<String>,
     {
         return S3Config {
             bucket: bucket.into(),
+            prefix: prefix.map(|p| AwsPrefix(p.into())),
         };
     }
 }

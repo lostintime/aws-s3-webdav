@@ -21,7 +21,7 @@ use std::sync::{Arc};
 
 fn main() {
     env_logger::init().unwrap();
-    info!("starting up");
+    info!("Starting up");
 
     let matches = clap::App::new("rust-aws-s3-proxy")
         .version("0.1.0")
@@ -46,6 +46,15 @@ fn main() {
                 .help("AWS Bucket name")
                 .takes_value(true)
                 .required(true)
+        )
+        .arg(
+            clap::Arg::with_name("aws_prefix")
+                .long("aws-prefix")
+                .value_name("BUCKET_PREFIX")
+                .env("AWS_PREFIX")
+                .help("AWS Bucket prefix")
+                .takes_value(true)
+                .required(false)
         )
         .arg(
             clap::Arg::with_name("aws_region")
@@ -78,8 +87,7 @@ fn main() {
         // TODO add argument for AWS key and secret
         .get_matches();
 
-    let args = matches.clone();
-    let bind_port = *(&args.value_of("bind").unwrap_or_default());
+    let bind_port = matches.value_of("bind").unwrap_or_default().to_owned();
 
     info!("Start server on {}", bind_port);
 
@@ -90,7 +98,7 @@ fn main() {
 
         let aws_region_name = args.value_of("aws_region").expect("AWS Region argument required").to_owned();
         
-        let config = env::AppConfig {
+        let state = env::AppState::new(env::AppConfig {
             aws: env::AwsConfig::new(
                 &args.value_of("aws_config").expect("AWS Config path argument required").to_owned(),
                 &args.value_of("aws_profile").expect("AWS Profile name argument required").to_owned(),
@@ -100,12 +108,10 @@ fn main() {
                 }
             ),
             s3: env::S3Config::new(
-                args.value_of("aws_bucket")
-                    .expect("AWS Bucket name argument required"),
+                args.value_of("aws_bucket").expect("AWS Bucket name argument required"),
+                args.value_of("aws_prefix"),
             ),
-        };
-
-        let state = env::AppState::new(config);
+        });
 
         App::with_state(Arc::new(state))
             .default_resource(move |r| {
@@ -118,7 +124,8 @@ fn main() {
                 r.method(http::Method::from_bytes(b"COPY").unwrap()).f(routes::copy_object);
                 r.method(http::Method::from_bytes(b"MOVE").unwrap()).f(routes::move_object);
             })
-    }).bind(&bind_port)
-        .expect(&format!("Cannot bind to {}", &bind_port))
-        .run();
+    })
+    .bind(&bind_port)
+    .expect(&format!("Cannot bind to {}", &bind_port))
+    .run();
 }

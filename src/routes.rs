@@ -10,6 +10,7 @@ use env::*;
 use rocket_aws_s3_proxy::stream_utils;
 use std::sync::Arc;
 
+/// Alias for application environment, shared between handlers
 type AppEnv = Arc<AppState>;
 
 fn extract_bucket(req: &HttpRequest<AppEnv>) -> String {
