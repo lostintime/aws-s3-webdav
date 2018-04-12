@@ -19,33 +19,9 @@ impl AwsConfig {
     }
 }
 
-pub struct AwsBucket(String);
-
-impl <'a> From<&'a AwsBucket> for String {
-    fn from(bucket: &AwsBucket) -> String {
-        bucket.0.to_owned()
-    }
-}
-
-pub struct AwsPrefix(String);
-
-pub struct InvalidAwsPrefix(String);
-
-impl AwsPrefix {
-    fn parse(_s: String) -> Result<AwsPrefix, InvalidAwsPrefix> {
-        return Ok(AwsPrefix(String::from("")))
-    }
-}
-
-impl <'a> From<&'a AwsPrefix> for String {
-    fn from(prefix: &AwsPrefix) -> String {
-        prefix.0.to_owned()
-    }
-}
-
 pub struct S3Config {
     pub bucket: String,
-    pub prefix: Option<AwsPrefix>,
+    pub prefix: Option<String>,
 }
 
 impl S3Config {
@@ -55,7 +31,7 @@ impl S3Config {
     {
         return S3Config {
             bucket: bucket.into(),
-            prefix: prefix.map(|p| AwsPrefix(p.into())),
+            prefix: prefix.map(|p| p.into()),
         };
     }
 }

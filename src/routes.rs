@@ -20,7 +20,7 @@ fn extract_bucket(req: &HttpRequest<AppEnv>) -> String {
 fn extract_object_key(req: &HttpRequest<AppEnv>) -> String {
   match req.state().config.s3.prefix {
     Some(ref prefix) => {
-      let mut s: String = prefix.into();
+      let mut s: String = prefix.to_owned();
 
       s.as_str()
         .trim_right_matches("/").to_owned()
