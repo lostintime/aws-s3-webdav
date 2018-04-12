@@ -4,7 +4,7 @@ use actix_web::{
   error::ErrorBadRequest
 };
 use rusoto_s3::*;
-use futures::{Future, Stream, future};
+use futures::{Future, Stream, future, stream};
 use bytes::Bytes;
 use env::*;
 use rocket_aws_s3_proxy::stream_utils;
@@ -20,15 +20,7 @@ fn extract_bucket(req: &HttpRequest<AppEnv>) -> String {
 fn extract_object_key(req: &HttpRequest<AppEnv>) -> String {
   match req.state().config.s3.prefix {
     Some(ref prefix) => {
-      let mut s: String = prefix.to_owned();
-
-      s.as_str()
-        .trim_right_matches("/").to_owned()
-        .push('/');
-
-      s.push_str(req.path().trim_left_matches("/"));
-
-      s
+      format!("{}{}", prefix, req.path().trim_left_matches("/"))
     },
     None => req.path().trim_left_matches("/").to_owned()
   }
@@ -106,12 +98,14 @@ fn upload_parts(req: HttpRequest<AppEnv>, upload: &CreateMultipartUploadOutput) 
     stream_utils::numbers(1)
       .map_err(|e| ErrorInternalServerError(e))
       .zip(
+        // Buffer into 5Mb chunks, AWS doesn't allow parts smaller than 5Mb
         req
           .map_err(|_e| ErrorInternalServerError("Something went wrong while reading request stream"))
+          // TODO optimize this
+          .map(|b| stream::iter_ok(b.to_vec()))
+          .flatten()
+          .chunks(5 * 1024 * 1024)
       )
-      .map(|(n, b)| -> (i64, Vec<u8>) {
-        (n, b.to_vec())
-      })
       .map_err(|_| UploadPartError::Unknown("Something went wrong with HttpRequest stream".to_owned()))
       .fold(vec![], move |mut parts, (part_number, data)| -> Box<future::Future<Item=Vec<CompletedPart>, Error=UploadPartError>> {
         Box::new(

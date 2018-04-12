@@ -109,7 +109,7 @@ fn main() {
             ),
             s3: env::S3Config::new(
                 args.value_of("aws_bucket").expect("AWS Bucket name argument required"),
-                args.value_of("aws_prefix"),
+                args.value_of("aws_prefix").and_then(|s| if s.is_empty() { None } else { Some(s) }),
             ),
         });
 
