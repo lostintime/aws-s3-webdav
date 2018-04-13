@@ -139,3 +139,8 @@ Application now uses `http` protocol for communication with AWS endpoint, ssl se
 
 To upload files application uses [AWS Mulipart Upload](https://docs.aws.amazon.com/AmazonS3/latest/dev/mpuoverview.html), which in case of failures in the middle of the upload will leave parts stored in S3, and you will be
 charged for patrs uploaded, so it's recommended to configure [Bucket Lifecycle Policy](https://docs.aws.amazon.com/AmazonS3/latest/dev/mpuoverview.html#mpu-abort-incomplete-mpu-lifecycle-config).
+
+
+## License
+
+Licensed under the Apache License, Version 2.0.
