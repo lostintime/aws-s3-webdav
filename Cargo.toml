@@ -17,6 +17,7 @@ rusoto_s3 = "0.32.0"
 rusoto_credential = "0.11.0"
 futures = "0.1.21"
 bytes = "0.4"
+tokio-core = "0.1.16"
 
 # enable debug for release profile when need to profile with optimizations
 # [profile.release]

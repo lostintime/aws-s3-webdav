@@ -11,6 +11,7 @@ extern crate rusoto_credential;
 extern crate rusoto_s3;
 extern crate toml;
 extern crate rocket_aws_s3_proxy;
+extern crate tokio_core;
 
 mod routes;
 mod env;
@@ -18,6 +19,7 @@ mod env;
 use actix_web::{App, http, server};
 use rusoto_core::{Region};
 use std::sync::{Arc};
+use std::borrow::ToOwned;
 
 fn main() {
     env_logger::init().unwrap();
@@ -41,18 +43,18 @@ fn main() {
         .arg(
             clap::Arg::with_name("aws_bucket")
                 .long("aws-bucket")
-                .value_name("BUCKET_NAME")
+                .value_name("BUCKET")
                 .env("AWS_BUCKET")
                 .help("AWS Bucket name")
                 .takes_value(true)
                 .required(true)
         )
         .arg(
-            clap::Arg::with_name("aws_prefix")
-                .long("aws-prefix")
-                .value_name("BUCKET_PREFIX")
-                .env("AWS_PREFIX")
-                .help("AWS Bucket prefix")
+            clap::Arg::with_name("aws_key_prefix")
+                .long("aws-key-prefix")
+                .value_name("KEY_PREFIX")
+                .env("AWS_KEY_PREFIX")
+                .help("AWS Bucket key prefix")
                 .takes_value(true)
                 .required(false)
         )
@@ -65,26 +67,6 @@ fn main() {
                 .takes_value(true)
                 .required(true)
         )
-        .arg(
-            clap::Arg::with_name("aws_config")
-                .long("aws-config")
-                .value_name("AWS_CONFIG")
-                .env("AWS_CONFIG")
-                .help("AWS Config file path")
-                .takes_value(true)
-                .required(true)
-        )
-        .arg(
-            clap::Arg::with_name("aws_profile")
-                .long("aws-profile")
-                .value_name("AWS_PROFILE")
-                .env("AWS_PROFILE")
-                .help("AWS Profile name in AWS_CONFIG")
-                .takes_value(true)
-                .default_value("default")
-                .required(false)
-        )
-        // TODO add argument for AWS key and secret
         .get_matches();
 
     let bind_port = matches.value_of("bind").unwrap_or_default().to_owned();
@@ -96,20 +78,22 @@ fn main() {
         info!("Building application");
         let args = matches.clone();
 
-        let aws_region_name = args.value_of("aws_region").expect("AWS Region argument required").to_owned();
+        let aws_region_name: String = args.value_of("aws_region")
+            .expect("AWS Region argument required").to_owned();
+
+        let aws_region: Region = aws_region_name.parse()
+            .expect("Is a valid AWS region id");
         
         let state = env::AppState::new(env::AppConfig {
             aws: env::AwsConfig::new(
-                &args.value_of("aws_config").expect("AWS Config path argument required").to_owned(),
-                &args.value_of("aws_profile").expect("AWS Profile name argument required").to_owned(),
                 &Region::Custom {
-                    name: aws_region_name.to_owned(),
-                    endpoint: format!("http://s3.{}.amazonaws.com", aws_region_name).to_owned()
+                    name: aws_region.name().to_owned(),
+                    endpoint: format!("http://s3.{}.amazonaws.com", aws_region.name()).to_owned()
                 }
             ),
             s3: env::S3Config::new(
                 args.value_of("aws_bucket").expect("AWS Bucket name argument required"),
-                args.value_of("aws_prefix").and_then(|s| if s.is_empty() { None } else { Some(s) }),
+                args.value_of("aws_key_prefix").and_then(|s| if s.is_empty() { None } else { Some(s) }),
             ),
         });
 
