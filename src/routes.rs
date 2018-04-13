@@ -1,5 +1,5 @@
 use actix_web::{
-  AsyncResponder, Error, HttpRequest, HttpResponse,
+  AsyncResponder, Error, HttpRequest, HttpResponse, http::header,
   error::ErrorInternalServerError, error::ErrorNotFound, error::ErrorForbidden,
   error::ErrorBadRequest
 };
@@ -44,14 +44,42 @@ pub fn get_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, E
     })
     .map(|r| match r.body {
       Some(body) => {
-        HttpResponse::Ok().streaming(
-          Box::new(
+        let mut response = HttpResponse::Ok();
+
+        if let Some(cache_control) = r.cache_control {
+          response.header(header::CACHE_CONTROL, cache_control.as_str());
+        }
+
+        if let Some(content_encoding) = r.content_encoding {
+          response.header(header::CONTENT_ENCODING, content_encoding.as_str());
+        }
+
+        if let Some(content_language) = r.content_language {
+          response.header(header::CONTENT_LANGUAGE, content_language.as_str());
+        }
+
+        if let Some(e_tag) = r.e_tag {
+          response.header(header::ETAG, e_tag.as_str());
+        }
+
+        if let Some(expires) = r.expires {
+          response.header(header::EXPIRES, expires.as_str());
+        }
+
+        if let Some(last_modified) = r.last_modified {
+          response.header(header::LAST_MODIFIED, last_modified.as_str());
+        }
+
+        response
+          .streaming(Box::new(
             body.map_err(|_e| ErrorInternalServerError("Something went wrong with body stream"))
               .map(Bytes::from)
-          )
-        )
+          ))
       },
-      None => HttpResponse::from_error(ErrorNotFound("Object Not Found")),
+      None => {
+        println!("r.body is None");
+        HttpResponse::from_error(ErrorNotFound("Object Not Found"))
+      },
     })
     .responder()
 }
@@ -72,7 +100,44 @@ pub fn head_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, 
       HeadObjectError::Validation(e) => ErrorBadRequest(e),
       HeadObjectError::Unknown(e) => ErrorInternalServerError(e),
     })
-    .map(|_| HttpResponse::Ok().finish())
+    .map(|r|  {
+        let mut response = HttpResponse::Ok();
+
+        // TODO add Accept-Ranges support
+        // if let Some(accept_ranges) = r.accept_ranges {
+        //   response.header(header::ACCEPT_RANGES, accept_ranges.as_str());
+        // }
+
+        if let Some(cache_control) = r.cache_control {
+          response.header(header::CACHE_CONTROL, cache_control.as_str());
+        }
+
+        if let Some(content_encoding) = r.content_encoding {
+          response.header(header::CONTENT_ENCODING, content_encoding.as_str());
+        }
+
+        if let Some(content_language) = r.content_language {
+          response.header(header::CONTENT_LANGUAGE, content_language.as_str());
+        }
+
+        if let Some(content_length) = r.content_length {
+          response.header(header::CONTENT_LENGTH, content_length.to_string().as_str());
+        }
+
+        if let Some(e_tag) = r.e_tag {
+          response.header(header::ETAG, e_tag.as_str());
+        }
+
+        if let Some(expires) = r.expires {
+          response.header(header::EXPIRES, expires.as_str());
+        }
+
+        if let Some(last_modified) = r.last_modified {
+          response.header(header::LAST_MODIFIED, last_modified.as_str());
+        }
+
+        response.finish()
+    })
     .responder()
 }
 
@@ -253,7 +318,7 @@ pub fn copy_object(mut req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpRespon
       state.s3
         .copy_object(&CopyObjectRequest {
             bucket: bucket.clone(),
-            copy_source: format!("{}/{}", bucket, source_key),
+            copy_source: util::encode_key(format!("{}/{}", bucket, source_key)),
             key: dest,
             ..CopyObjectRequest::default()
         })
