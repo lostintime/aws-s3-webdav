@@ -92,10 +92,7 @@ pub fn get_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, E
               .map(Bytes::from)
           ))
       },
-      None => {
-        println!("r.body is None");
-        HttpResponse::from_error(ErrorNotFound("Object Not Found"))
-      },
+      None => HttpResponse::from_error(ErrorNotFound("Object Not Found")),
     })
     .responder()
 }
@@ -208,7 +205,7 @@ fn upload_parts(req: HttpRequest<AppEnv>, upload: &CreateMultipartUploadOutput) 
   )
 }
 
-fn complete_upload(env: AppEnv, upload: &CreateMultipartUploadOutput, parts: Vec<CompletedPart>) -> Box<Future<Item=CompleteMultipartUploadOutput, Error=CompleteMultipartUploadError>> {
+fn complete_upload(env: &AppEnv, upload: &CreateMultipartUploadOutput, parts: Vec<CompletedPart>) -> Box<Future<Item=CompleteMultipartUploadOutput, Error=CompleteMultipartUploadError>> {
   Box::new(env.s3
     .complete_multipart_upload(&CompleteMultipartUploadRequest {
       bucket: upload.bucket.to_owned().unwrap(),
@@ -222,7 +219,7 @@ fn complete_upload(env: AppEnv, upload: &CreateMultipartUploadOutput, parts: Vec
   )
 }
 
-fn abort_upload(env: AppEnv, upload: &CreateMultipartUploadOutput) -> Box<Future<Item = AbortMultipartUploadOutput, Error =AbortMultipartUploadError>> {
+fn abort_upload(env: &AppEnv, upload: &CreateMultipartUploadOutput) -> Box<Future<Item = AbortMultipartUploadOutput, Error =AbortMultipartUploadError>> {
   Box::new(env.s3
     .abort_multipart_upload(&AbortMultipartUploadRequest {
       bucket: upload.bucket.to_owned().unwrap(),
@@ -238,18 +235,27 @@ pub fn put_object(mut req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpRespons
   let key = extract_object_key(&req);
 
   let state = req.state().clone();
-  
+  // select headers
+  let cache_control = req.headers_mut().get(header::CACHE_CONTROL).and_then(header_string);
+  let content_disposition = req.headers_mut().get(header::CONTENT_DISPOSITION).and_then(header_string);
+  let content_encoding = req.headers_mut().get(header::CONTENT_ENCODING).and_then(header_string);
+  let content_language = req.headers_mut().get(header::CONTENT_LANGUAGE).and_then(header_string);
+  let content_type = req.headers_mut().get(header::CONTENT_TYPE).and_then(header_string);
+  let expires = req.headers_mut().get(header::EXPIRES).and_then(header_string);
+
+  // TODO optimize upload - check request size then decide which upload method to use (multipart_upload vs put_object)
+
   let f1: Box<Future<Item=HttpResponse, Error=Error>> = Box::new(
     state.s3
       .create_multipart_upload(&CreateMultipartUploadRequest {
-        bucket: bucket,
-        key: key,
-        cache_control: req.headers_mut().get(header::CACHE_CONTROL).and_then(header_string),
-        content_disposition: req.headers_mut().get(header::CONTENT_DISPOSITION).and_then(header_string),
-        content_encoding: req.headers_mut().get(header::CONTENT_ENCODING).and_then(header_string),
-        content_language: req.headers_mut().get(header::CONTENT_LANGUAGE).and_then(header_string),
-        content_type: req.headers_mut().get(header::CONTENT_TYPE).and_then(header_string),
-        expires: req.headers_mut().get(header::EXPIRES).and_then(header_string),
+        bucket: bucket.to_owned(),
+        key: key.to_owned(),
+        cache_control: cache_control.to_owned(),
+        content_disposition: content_disposition.to_owned(),
+        content_encoding: content_encoding.to_owned(),
+        content_language: content_language.to_owned(),
+        content_type: content_type.to_owned(),
+        expires: expires.to_owned(),
         ..CreateMultipartUploadRequest::default()
       })
       .map_err(|e| match e {
@@ -262,22 +268,54 @@ pub fn put_object(mut req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpRespons
         upload_parts(req, &upload)
           .then(move |parts_r| match parts_r {
             Ok(parts) => {
-              let c: Box<Future<Item = HttpResponse, Error = Error>> = Box::new(
-                complete_upload(state, &upload, parts)
-                  .map(|_| HttpResponse::Ok().finish())
-                  .map_err(|e| match e {
-                    CompleteMultipartUploadError::HttpDispatch(e) => ErrorInternalServerError(e),
-                    CompleteMultipartUploadError::Credentials(e) => ErrorForbidden(e),
-                    CompleteMultipartUploadError::Validation(e) => ErrorBadRequest(e),
-                    CompleteMultipartUploadError::Unknown(e) => ErrorInternalServerError(e),
-                  })
-              );
+              let c: Box<Future<Item = HttpResponse, Error = Error>>;
+
+              if parts.is_empty() {
+                // no parts upload - file is empty
+                c = Box::new(
+                  abort_upload(&state, &upload)
+                    .then(move |_| {
+                      state.s3.put_object(&PutObjectRequest {
+                        bucket: bucket,
+                        key: key,
+                        body: Some(vec![]),
+                        cache_control: cache_control.to_owned(),
+                        content_disposition: content_disposition.to_owned(),
+                        content_encoding: content_encoding.to_owned(),
+                        content_language: content_language.to_owned(),
+                        content_type: content_type.to_owned(),
+                        expires: expires.to_owned(),
+                        ..PutObjectRequest::default()
+                      })
+                      .map_err(|e| match e {
+                        PutObjectError::HttpDispatch(e) => ErrorInternalServerError(e),
+                        PutObjectError::Credentials(e) => ErrorForbidden(e),
+                        PutObjectError::Validation(e) => ErrorBadRequest(e), 
+                        PutObjectError::Unknown(e) => ErrorInternalServerError(e),
+                      })
+                    })
+                    .map(|_| HttpResponse::Ok().finish())
+                    
+                );
+
+              } else {
+                c = Box::new(
+                  complete_upload(&state, &upload, parts)
+                    .map_err(|e| match e {
+                      CompleteMultipartUploadError::HttpDispatch(e) => ErrorInternalServerError(e),
+                      CompleteMultipartUploadError::Credentials(e) => ErrorForbidden(e),
+                      CompleteMultipartUploadError::Validation(e) => ErrorBadRequest(e),
+                      CompleteMultipartUploadError::Unknown(e) => ErrorInternalServerError(e),
+                    })
+                    .map(|_| HttpResponse::Ok().finish())
+                );
+              }
 
               c
             },
             Err(e) => {
               let c: Box<Future<Item = HttpResponse, Error = Error>> = Box::new(
-                abort_upload(state, &upload)
+                abort_upload(&state, &upload)
                   .map(|_| HttpResponse::Ok().finish())
                   .then(|_|
                     Err(match e {
