@@ -36,6 +36,13 @@ pub mod stream_utils {
 
                 assert_eq!(v, vec![(0, 10), (1, 11)]);
             }
+
+            #[test]
+            fn test_zip_empty() {
+                let v = numbers(0).take(1).zip(numbers(1).take(0)).collect().wait().unwrap();
+
+                assert_eq!(v, vec![]);
+            }
         }
     }
 }

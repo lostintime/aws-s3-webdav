@@ -30,6 +30,10 @@ fn header_string(h: &header::HeaderValue) -> Option<String> {
   h.to_str().map(|h| h.to_string()).ok()  
 }
 
+pub fn index(_req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
+  Box::new(future::ok(HttpResponse::NotImplemented().finish()))
+}
+
 /// Get object from bucket
 pub fn get_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
   req.state().s3

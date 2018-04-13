@@ -98,6 +98,7 @@ fn main() {
         });
 
         App::with_state(Arc::new(state))
+            .resource("/", |r| r.route().f(routes::index))
             .default_resource(move |r| {
                 r.method(http::Method::GET).f(routes::get_object);
                 r.method(http::Method::HEAD).f(routes::head_object);
