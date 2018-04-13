@@ -125,7 +125,7 @@ docker run --read-only \
     -e "AWS_REGION=eu-central-1" \
     -e "AWS_BUCKET=my-bucket" \
     -e "AWS_KEY_PREFIX=tmp/" \
-    lostintime/aws-s3-webdav:latest
+    lostintime/aws-s3-webdav:0.1.0
 ```
 
 
