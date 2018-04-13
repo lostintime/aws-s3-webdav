@@ -1,5 +1,5 @@
 [package]
-name = "rocket_aws_s3_proxy"
+name = "aws_s3_webdav"
 version = "0.1.0"
 authors = ["lostintime <lostintime.dev@gmail.com>"]
 

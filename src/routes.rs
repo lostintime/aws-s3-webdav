@@ -7,7 +7,7 @@ use rusoto_s3::*;
 use futures::{Future, Stream, future, stream};
 use bytes::Bytes;
 use env::*;
-use rocket_aws_s3_proxy::stream_utils;
+use aws_s3_webdav::stream_utils;
 use std::sync::Arc;
 
 /// Alias for application environment, shared between handlers

@@ -1,4 +1,4 @@
-extern crate rocket_aws_s3_proxy;
+extern crate aws_s3_webdav;
 
 #[test]
 fn doit() {

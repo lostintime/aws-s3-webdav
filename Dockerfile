@@ -15,9 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/x86_64-unknown-linux-gnu/release/rocket_aws_s3_proxy /usr/bin/rocket_aws_s3_proxy
+COPY --from=builder /app/target/x86_64-unknown-linux-gnu/release/aws_s3_webdav /usr/bin/aws_s3_webdav
 
 EXPOSE 8080
 
-# CMD [ "/usr/bin/rocket_aws_s3_proxy" ]
-ENTRYPOINT [ "/usr/bin/rocket_aws_s3_proxy" ]
+ENTRYPOINT [ "/usr/bin/aws_s3_webdav" ]

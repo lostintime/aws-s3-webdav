@@ -10,7 +10,7 @@ extern crate rusoto_core;
 extern crate rusoto_credential;
 extern crate rusoto_s3;
 extern crate toml;
-extern crate rocket_aws_s3_proxy;
+extern crate aws_s3_webdav;
 extern crate tokio_core;
 
 mod routes;
