@@ -1,6 +1,24 @@
 [package]
-name = "rocket-aws-s3-proxy"
+name = "aws_s3_webdav"
 version = "0.1.0"
 authors = ["lostintime <lostintime.dev@gmail.com>"]
 
 [dependencies]
+log = "0.3.8"
+env_logger = "0.3"
+clap = "2.27.1"
+toml = "0.4.5"
+serde = "1.0.17"
+serde_derive = "1.0.17"
+actix = "0.5.5"
+actix-web = "0.5.1"
+rusoto_core = "0.32.0"
+rusoto_s3 = "0.32.0"
+rusoto_credential = "0.11.0"
+futures = "0.1.21"
+bytes = "0.4"
+tokio-core = "0.1.16"
+
+# enable debug for release profile when need to profile with optimizations
+# [profile.release]
+# debug = true
