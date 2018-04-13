@@ -26,6 +26,10 @@ fn extract_object_key(req: &HttpRequest<AppEnv>) -> String {
   }
 }
 
+fn header_string(h: &header::HeaderValue) -> Option<String> {
+  h.to_str().map(|h| h.to_string()).ok()  
+}
+
 /// Get object from bucket
 pub fn get_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
   req.state().s3
@@ -50,12 +54,20 @@ pub fn get_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, E
           response.header(header::CACHE_CONTROL, cache_control.as_str());
         }
 
+        if let Some(content_disposition) = r.content_disposition {
+          response.header(header::CONTENT_DISPOSITION, content_disposition.as_str());
+        }
+
         if let Some(content_encoding) = r.content_encoding {
           response.header(header::CONTENT_ENCODING, content_encoding.as_str());
         }
 
         if let Some(content_language) = r.content_language {
           response.header(header::CONTENT_LANGUAGE, content_language.as_str());
+        }
+
+        if let Some(content_type) = r.content_type {
+          response.header(header::CONTENT_TYPE, content_type.as_str());
         }
 
         if let Some(e_tag) = r.e_tag {
@@ -112,6 +124,10 @@ pub fn head_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, 
           response.header(header::CACHE_CONTROL, cache_control.as_str());
         }
 
+        if let Some(content_disposition) = r.content_disposition {
+          response.header(header::CONTENT_DISPOSITION, content_disposition.as_str());
+        }
+
         if let Some(content_encoding) = r.content_encoding {
           response.header(header::CONTENT_ENCODING, content_encoding.as_str());
         }
@@ -122,6 +138,10 @@ pub fn head_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, 
 
         if let Some(content_length) = r.content_length {
           response.header(header::CONTENT_LENGTH, content_length.to_string().as_str());
+        }
+
+        if let Some(content_type) = r.content_type {
+          response.header(header::CONTENT_TYPE, content_type.as_str());
         }
 
         if let Some(e_tag) = r.e_tag {
@@ -139,17 +159,6 @@ pub fn head_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, 
         response.finish()
     })
     .responder()
-}
-
-fn create_upload(env: AppEnv, bucket: String, key: String) -> Box<Future<Item=CreateMultipartUploadOutput, Error=CreateMultipartUploadError>> {
-  Box::new(
-    env.s3
-      .create_multipart_upload(&CreateMultipartUploadRequest {
-        bucket: bucket,
-        key: key,
-        ..CreateMultipartUploadRequest::default()
-      })
-  )
 }
 
 fn upload_parts(req: HttpRequest<AppEnv>, upload: &CreateMultipartUploadOutput) -> Box<Future<Item=Vec<CompletedPart>, Error=UploadPartError>> {
@@ -220,14 +229,25 @@ fn abort_upload(env: AppEnv, upload: &CreateMultipartUploadOutput) -> Box<Future
   )
 }
 
-pub fn put_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
+pub fn put_object(mut req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
   let bucket = extract_bucket(&req);
   let key = extract_object_key(&req);
 
   let state = req.state().clone();
   
   let f1: Box<Future<Item=HttpResponse, Error=Error>> = Box::new(
-    create_upload(req.state().clone(), bucket, key)
+    state.s3
+      .create_multipart_upload(&CreateMultipartUploadRequest {
+        bucket: bucket,
+        key: key,
+        cache_control: req.headers_mut().get(header::CACHE_CONTROL).and_then(header_string),
+        content_disposition: req.headers_mut().get(header::CONTENT_DISPOSITION).and_then(header_string),
+        content_encoding: req.headers_mut().get(header::CONTENT_ENCODING).and_then(header_string),
+        content_language: req.headers_mut().get(header::CONTENT_LANGUAGE).and_then(header_string),
+        content_type: req.headers_mut().get(header::CONTENT_TYPE).and_then(header_string),
+        expires: req.headers_mut().get(header::EXPIRES).and_then(header_string),
+        ..CreateMultipartUploadRequest::default()
+      })
       .map_err(|e| match e {
         CreateMultipartUploadError::HttpDispatch(e) => ErrorInternalServerError(e),
         CreateMultipartUploadError::Credentials(e) => ErrorForbidden(e),
