@@ -117,11 +117,11 @@ There is an automated docker build configured for this repo: [lostintime/aws-s3-
 ### Run service container
 
 ```
-docker run --read-only \
+docker run --read-only --rm \
     -p 127.0.0.1:8080:8080 \
     -v ~/.aws/credentials:/.aws/credentials \
     -e "AWS_SHARED_CREDENTIALS_FILE=/.aws/credentials" \
-    -e "AWS_PROFILE=my_custom_profile" \
+    -e "AWS_PROFILE=default" \
     -e "AWS_REGION=eu-central-1" \
     -e "AWS_BUCKET=my-bucket" \
     -e "AWS_KEY_PREFIX=tmp/" \
