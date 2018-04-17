@@ -1,0 +1,6 @@
+max_width = 99
+# reorder_imports = true # unstable, nightly only
+# reorder_imports_in_group = true # unstable, nightly only
+# reorder_imported_names = true # unstable, nightly only
+wrap_comments = true
+# fn_args_density = "Compressed" # unstable, nightly only

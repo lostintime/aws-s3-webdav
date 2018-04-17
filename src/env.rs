@@ -1,6 +1,6 @@
 use rusoto_core::Region;
 use rusoto_s3::*;
-use rusoto_core::{reactor::RequestDispatcher, reactor::CredentialsProvider};
+use rusoto_core::{reactor::CredentialsProvider, reactor::RequestDispatcher};
 
 pub struct AwsConfig {
     pub region: Region,
@@ -50,7 +50,7 @@ impl AppState {
                 CredentialsProvider::default(),
                 config.aws.region.to_owned(),
             ),
-            config: config
+            config: config,
         }
     }
 }
