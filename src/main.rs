@@ -22,7 +22,7 @@ use std::sync::Arc;
 use std::borrow::ToOwned;
 
 fn main() {
-    env_logger::init().unwrap();
+    env_logger::init();
     info!("Starting up");
 
     let matches = clap::App::new("rust-aws-s3-proxy")
