@@ -11,17 +11,17 @@ use std::sync::Arc;
 /// Alias for application environment, shared between handlers
 type AppEnv = Arc<AppState>;
 
-//fn extract_bucket(req: &HttpRequest<AppEnv>) -> String {
-//    req.state().config.s3.bucket.as_str().to_owned()
-//}
-//
-//fn extract_object_key(req: &HttpRequest<AppEnv>) -> String {
-//    match req.state().config.s3.prefix {
-//        Some(ref prefix) => format!("{}{}", prefix, req.path().trim_left_matches("/")),
-//        None => req.path().trim_left_matches("/").to_owned(),
-//    }
-//}
-//
+fn extract_bucket(req: &HttpRequest<AppEnv>) -> String {
+    req.state().config.s3.bucket.as_str().to_owned()
+}
+
+fn extract_object_key(req: &HttpRequest<AppEnv>) -> String {
+    match req.state().config.s3.prefix {
+        Some(ref prefix) => format!("{}{}", prefix, req.path().trim_left_matches("/")),
+        None => req.path().trim_left_matches("/").to_owned(),
+    }
+}
+
 //fn header_string(h: &header::HeaderValue) -> Option<String> {
 //    h.to_str().map(|h| h.to_string()).ok()
 //}
@@ -30,68 +30,68 @@ pub fn index(_req: &HttpRequest<AppEnv>) -> impl Responder {
     HttpResponse::NotImplemented()
 }
 
-///// Get object from bucket
-//pub fn get_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
-//    req.state()
-//        .s3
-//        .get_object(&GetObjectRequest {
-//            bucket: extract_bucket(&req),
-//            key: extract_object_key(&req),
-//            ..GetObjectRequest::default()
-//        })
-//        .map_err(|e| match e {
-//            // http://rusoto.github.io/rusoto/rusoto_s3/enum.GetObjectError.html
-//            GetObjectError::NoSuchKey(e) => ErrorNotFound(e),
-//            GetObjectError::HttpDispatch(e) => ErrorInternalServerError(e),
-//            GetObjectError::Credentials(e) => ErrorForbidden(e),
-//            GetObjectError::Validation(e) => ErrorBadRequest(e),
-//            GetObjectError::Unknown(e) => ErrorInternalServerError(e),
-//        })
-//        .map(|r| match r.body {
-//            Some(body) => {
-//                let mut response = HttpResponse::Ok();
-//
-//                if let Some(cache_control) = r.cache_control {
-//                    response.header(header::CACHE_CONTROL, cache_control.as_str());
-//                }
-//
-//                if let Some(content_disposition) = r.content_disposition {
-//                    response.header(header::CONTENT_DISPOSITION, content_disposition.as_str());
-//                }
-//
-//                if let Some(content_encoding) = r.content_encoding {
-//                    response.header(header::CONTENT_ENCODING, content_encoding.as_str());
-//                }
-//
-//                if let Some(content_language) = r.content_language {
-//                    response.header(header::CONTENT_LANGUAGE, content_language.as_str());
-//                }
-//
-//                if let Some(content_type) = r.content_type {
-//                    response.header(header::CONTENT_TYPE, content_type.as_str());
-//                }
-//
-//                if let Some(e_tag) = r.e_tag {
-//                    response.header(header::ETAG, e_tag.as_str());
-//                }
-//
-//                if let Some(expires) = r.expires {
-//                    response.header(header::EXPIRES, expires.as_str());
-//                }
-//
-//                if let Some(last_modified) = r.last_modified {
-//                    response.header(header::LAST_MODIFIED, last_modified.as_str());
-//                }
-//
-//                response.streaming(Box::new(body.map_err(|_e| {
-//                    ErrorInternalServerError("Something went wrong with body stream")
-//                }).map(Bytes::from)))
-//            }
-//            None => HttpResponse::from_error(ErrorNotFound("Object Not Found")),
-//        })
-//        .responder()
-//}
-//
+/// Get object from bucket
+pub fn get_object(req: &HttpRequest<AppEnv>) -> impl Responder {
+    req.state()
+        .s3
+        .get_object(&GetObjectRequest {
+            bucket: extract_bucket(&req),
+            key: extract_object_key(&req),
+            ..GetObjectRequest::default()
+        })
+        .map_err(|e| match e {
+            // http://rusoto.github.io/rusoto/rusoto_s3/enum.GetObjectError.html
+            GetObjectError::NoSuchKey(e) => ErrorNotFound(e),
+            GetObjectError::HttpDispatch(e) => ErrorInternalServerError(e),
+            GetObjectError::Credentials(e) => ErrorForbidden(e),
+            GetObjectError::Validation(e) => ErrorBadRequest(e),
+            GetObjectError::Unknown(e) => ErrorInternalServerError(e),
+        })
+        .map(|r| match r.body {
+            Some(body) => {
+                let mut response = HttpResponse::Ok();
+
+                if let Some(cache_control) = r.cache_control {
+                    response.header(header::CACHE_CONTROL, cache_control.as_str());
+                }
+
+                if let Some(content_disposition) = r.content_disposition {
+                    response.header(header::CONTENT_DISPOSITION, content_disposition.as_str());
+                }
+
+                if let Some(content_encoding) = r.content_encoding {
+                    response.header(header::CONTENT_ENCODING, content_encoding.as_str());
+                }
+
+                if let Some(content_language) = r.content_language {
+                    response.header(header::CONTENT_LANGUAGE, content_language.as_str());
+                }
+
+                if let Some(content_type) = r.content_type {
+                    response.header(header::CONTENT_TYPE, content_type.as_str());
+                }
+
+                if let Some(e_tag) = r.e_tag {
+                    response.header(header::ETAG, e_tag.as_str());
+                }
+
+                if let Some(expires) = r.expires {
+                    response.header(header::EXPIRES, expires.as_str());
+                }
+
+                if let Some(last_modified) = r.last_modified {
+                    response.header(header::LAST_MODIFIED, last_modified.as_str());
+                }
+
+                response.streaming(Box::new(body.map_err(|_e| {
+                    ErrorInternalServerError("Something went wrong with body stream")
+                }).map(Bytes::from)))
+            }
+            None => HttpResponse::from_error(ErrorNotFound("Object Not Found")),
+        })
+        .responder()
+}
+
 ///// HEAD object from bucket
 //pub fn head_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
 //    req.state()
