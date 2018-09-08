@@ -388,26 +388,26 @@ pub fn head_object(req: &HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse,
 //
 //    f1
 //}
-//
-//pub fn delete_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
-//    req.state()
-//        .s3
-//        .delete_object(&DeleteObjectRequest {
-//            bucket: extract_bucket(&req),
-//            key: extract_object_key(&req),
-//            ..DeleteObjectRequest::default()
-//        })
-//        .map_err(|e| match e {
-//            // http://rusoto.github.io/rusoto/rusoto_s3/enum.DeleteObjectError.html
-//            DeleteObjectError::HttpDispatch(e) => ErrorInternalServerError(e),
-//            DeleteObjectError::Credentials(e) => ErrorForbidden(e),
-//            DeleteObjectError::Validation(e) => ErrorBadRequest(e),
-//            DeleteObjectError::Unknown(e) => ErrorInternalServerError(e),
-//        })
-//        .map(|_| HttpResponse::Ok().finish())
-//        .responder()
-//}
-//
+
+pub fn delete_object(req: &HttpRequest<AppEnv>) -> impl Responder {
+    req.state()
+        .s3
+        .delete_object(&DeleteObjectRequest {
+            bucket: extract_bucket(&req),
+            key: extract_object_key(&req),
+            ..DeleteObjectRequest::default()
+        })
+        .map_err(|e| match e {
+            // http://rusoto.github.io/rusoto/rusoto_s3/enum.DeleteObjectError.html
+            DeleteObjectError::HttpDispatch(e) => ErrorInternalServerError(e),
+            DeleteObjectError::Credentials(e) => ErrorForbidden(e),
+            DeleteObjectError::Validation(e) => ErrorBadRequest(e),
+            DeleteObjectError::Unknown(e) => ErrorInternalServerError(e),
+        })
+        .map(|_| HttpResponse::Ok().finish())
+        .responder()
+}
+
 //enum DestinationHeaderError {
 //    Missing,
 //    Invalid,
