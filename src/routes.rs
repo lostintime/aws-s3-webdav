@@ -92,72 +92,72 @@ pub fn get_object(req: &HttpRequest<AppEnv>) -> impl Responder {
         .responder()
 }
 
-///// HEAD object from bucket
-//pub fn head_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
-//    req.state()
-//        .s3
-//        .head_object(&HeadObjectRequest {
-//            bucket: extract_bucket(&req),
-//            key: extract_object_key(&req),
-//            ..HeadObjectRequest::default()
-//        })
-//        .map_err(|e| match e {
-//            // http://rusoto.github.io/rusoto/rusoto_s3/enum.HeadObjectError.html
-//            HeadObjectError::NoSuchKey(e) => ErrorNotFound(e),
-//            HeadObjectError::HttpDispatch(e) => ErrorInternalServerError(e),
-//            HeadObjectError::Credentials(e) => ErrorForbidden(e),
-//            HeadObjectError::Validation(e) => ErrorBadRequest(e),
-//            HeadObjectError::Unknown(e) => ErrorInternalServerError(e),
-//        })
-//        .map(|r| {
-//            let mut response = HttpResponse::Ok();
-//
-//            // TODO add Accept-Ranges support
-//            // if let Some(accept_ranges) = r.accept_ranges {
-//            //   response.header(header::ACCEPT_RANGES, accept_ranges.as_str());
-//            // }
-//
-//            if let Some(cache_control) = r.cache_control {
-//                response.header(header::CACHE_CONTROL, cache_control.as_str());
-//            }
-//
-//            if let Some(content_disposition) = r.content_disposition {
-//                response.header(header::CONTENT_DISPOSITION, content_disposition.as_str());
-//            }
-//
-//            if let Some(content_encoding) = r.content_encoding {
-//                response.header(header::CONTENT_ENCODING, content_encoding.as_str());
-//            }
-//
-//            if let Some(content_language) = r.content_language {
-//                response.header(header::CONTENT_LANGUAGE, content_language.as_str());
-//            }
-//
-//            if let Some(content_length) = r.content_length {
-//                response.header(header::CONTENT_LENGTH, content_length.to_string().as_str());
-//            }
-//
-//            if let Some(content_type) = r.content_type {
-//                response.header(header::CONTENT_TYPE, content_type.as_str());
-//            }
-//
-//            if let Some(e_tag) = r.e_tag {
-//                response.header(header::ETAG, e_tag.as_str());
-//            }
-//
-//            if let Some(expires) = r.expires {
-//                response.header(header::EXPIRES, expires.as_str());
-//            }
-//
-//            if let Some(last_modified) = r.last_modified {
-//                response.header(header::LAST_MODIFIED, last_modified.as_str());
-//            }
-//
-//            response.finish()
-//        })
-//        .responder()
-//}
-//
+/// HEAD object from bucket
+pub fn head_object(req: &HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
+    req.state()
+        .s3
+        .head_object(&HeadObjectRequest {
+            bucket: extract_bucket(&req),
+            key: extract_object_key(&req),
+            ..HeadObjectRequest::default()
+        })
+        .map_err(|e| match e {
+            // http://rusoto.github.io/rusoto/rusoto_s3/enum.HeadObjectError.html
+            HeadObjectError::NoSuchKey(e) => ErrorNotFound(e),
+            HeadObjectError::HttpDispatch(e) => ErrorInternalServerError(e),
+            HeadObjectError::Credentials(e) => ErrorForbidden(e),
+            HeadObjectError::Validation(e) => ErrorBadRequest(e),
+            HeadObjectError::Unknown(e) => ErrorInternalServerError(e),
+        })
+        .map(|r| {
+            let mut response = HttpResponse::Ok();
+
+            // TODO add Accept-Ranges support
+            // if let Some(accept_ranges) = r.accept_ranges {
+            //   response.header(header::ACCEPT_RANGES, accept_ranges.as_str());
+            // }
+
+            if let Some(cache_control) = r.cache_control {
+                response.header(header::CACHE_CONTROL, cache_control.as_str());
+            }
+
+            if let Some(content_disposition) = r.content_disposition {
+                response.header(header::CONTENT_DISPOSITION, content_disposition.as_str());
+            }
+
+            if let Some(content_encoding) = r.content_encoding {
+                response.header(header::CONTENT_ENCODING, content_encoding.as_str());
+            }
+
+            if let Some(content_language) = r.content_language {
+                response.header(header::CONTENT_LANGUAGE, content_language.as_str());
+            }
+
+            if let Some(content_length) = r.content_length {
+                response.header(header::CONTENT_LENGTH, content_length.to_string().as_str());
+            }
+
+            if let Some(content_type) = r.content_type {
+                response.header(header::CONTENT_TYPE, content_type.as_str());
+            }
+
+            if let Some(e_tag) = r.e_tag {
+                response.header(header::ETAG, e_tag.as_str());
+            }
+
+            if let Some(expires) = r.expires {
+                response.header(header::EXPIRES, expires.as_str());
+            }
+
+            if let Some(last_modified) = r.last_modified {
+                response.header(header::LAST_MODIFIED, last_modified.as_str());
+            }
+
+            response.finish()
+        })
+        .responder()
+}
+
 //fn upload_parts(
 //    req: HttpRequest<AppEnv>,
 //    upload: &CreateMultipartUploadOutput,

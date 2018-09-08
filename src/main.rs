@@ -106,7 +106,7 @@ fn main() {
             .resource("/", |r| r.f(routes::index))
             .default_resource(move |r| {
                 r.method(http::Method::GET).f(routes::get_object);
-//                r.method(http::Method::HEAD).f(routes::head_object);
+                r.method(http::Method::HEAD).f(routes::head_object);
 //                r.method(http::Method::PUT).f(routes::put_object);
 //                r.method(http::Method::DELETE).f(routes::delete_object);
 //                r.method(http::Method::from_bytes(b"COPY").unwrap())
