@@ -93,7 +93,7 @@ pub fn get_object(req: &HttpRequest<AppEnv>) -> impl Responder {
 }
 
 /// HEAD object from bucket
-pub fn head_object(req: &HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
+pub fn head_object(req: &HttpRequest<AppEnv>) -> Box<Future<Item=HttpResponse, Error=Error>> {
     req.state()
         .s3
         .head_object(&HeadObjectRequest {
@@ -408,55 +408,53 @@ pub fn delete_object(req: &HttpRequest<AppEnv>) -> impl Responder {
         .responder()
 }
 
-//enum DestinationHeaderError {
-//    Missing,
-//    Invalid,
-//}
-//
-//fn extract_destination_header(
-//    req: &mut HttpRequest<AppEnv>,
-//) -> Result<String, DestinationHeaderError> {
-//    match req.headers_mut().get("destination") {
-//        Some(destination) => match destination.to_str() {
-//            Ok(dest) => Ok(dest.trim_left_matches("/").to_owned()),
-//            Err(_) => Err(DestinationHeaderError::Invalid),
-//        },
-//        None => Err(DestinationHeaderError::Missing),
-//    }
-//}
-//
-//pub fn copy_object(
-//    mut req: HttpRequest<AppEnv>,
-//) -> Box<Future<Item = HttpResponse, Error = Error>> {
-//    let state = req.state().clone();
-//    let bucket = extract_bucket(&req);
-//    let source_key = extract_object_key(&req);
-//
-//    match extract_destination_header(&mut req) {
-//        Ok(dest) => {
-//            state
-//                .s3
-//                .copy_object(&CopyObjectRequest {
-//                    bucket: bucket.clone(),
-//                    copy_source: util::encode_key(format!("{}/{}", bucket, source_key)),
-//                    key: dest,
-//                    ..CopyObjectRequest::default()
-//                })
-//                .map_err(|e| match e {
-//                    // http://rusoto.github.io/rusoto/rusoto_s3/enum.CopyObjectError.html
-//                    CopyObjectError::HttpDispatch(e) => ErrorInternalServerError(e),
-//                    CopyObjectError::Credentials(e) => ErrorForbidden(e),
-//                    CopyObjectError::Validation(e) => ErrorBadRequest(e),
-//                    CopyObjectError::ObjectNotInActiveTierError(e) => ErrorForbidden(e),
-//                    CopyObjectError::Unknown(e) => ErrorInternalServerError(e),
-//                })
-//                .map(|_| HttpResponse::Ok().finish())
-//                .responder()
-//        }
-//        Err(_) => Box::new(future::err(ErrorBadRequest("Invalid Destination header"))),
-//    }
-//}
-//
+enum DestinationHeaderError {
+    Missing,
+    Invalid,
+}
+
+fn extract_destination_header(
+    req: &HttpRequest<AppEnv>,
+) -> Result<String, DestinationHeaderError> {
+    match req.headers().get("destination") {
+        Some(destination) => match destination.to_str() {
+            Ok(dest) => Ok(dest.trim_left_matches("/").to_owned()),
+            Err(_) => Err(DestinationHeaderError::Invalid),
+        },
+        None => Err(DestinationHeaderError::Missing),
+    }
+}
+
+pub fn copy_object(req: &HttpRequest<AppEnv>) -> impl Responder {
+    let state = req.state().clone();
+    let bucket = extract_bucket(&req);
+    let source_key = extract_object_key(&req);
+
+    match extract_destination_header(req) {
+        Ok(dest) => {
+            state
+                .s3
+                .copy_object(&CopyObjectRequest {
+                    bucket: bucket.clone(),
+                    copy_source: util::encode_key(format!("{}/{}", bucket, source_key)),
+                    key: dest,
+                    ..CopyObjectRequest::default()
+                })
+                .map_err(|e| match e {
+                    // http://rusoto.github.io/rusoto/rusoto_s3/enum.CopyObjectError.html
+                    CopyObjectError::HttpDispatch(e) => ErrorInternalServerError(e),
+                    CopyObjectError::Credentials(e) => ErrorForbidden(e),
+                    CopyObjectError::Validation(e) => ErrorBadRequest(e),
+                    CopyObjectError::ObjectNotInActiveTierError(e) => ErrorForbidden(e),
+                    CopyObjectError::Unknown(e) => ErrorInternalServerError(e),
+                })
+                .map(|_| HttpResponse::Ok().finish())
+                .responder()
+        }
+        Err(_) => Box::new(future::err(ErrorBadRequest("Invalid Destination header"))),
+    }
+}
+
 //pub fn move_object(req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
 //    let state = req.state().clone();
 //    let bucket = extract_bucket(&req);
