@@ -1,6 +1,6 @@
 use actix_web::{AsyncResponder, Error, HttpRequest, HttpResponse, error::ErrorBadRequest,
                 error::ErrorForbidden, error::ErrorInternalServerError, error::ErrorNotFound,
-                http::header};
+                http::header, Responder};
 use rusoto_s3::*;
 use futures::{future, stream, Future, Stream};
 use bytes::Bytes;
@@ -26,8 +26,8 @@ type AppEnv = Arc<AppState>;
 //    h.to_str().map(|h| h.to_string()).ok()
 //}
 
-pub fn index(_req: HttpRequest<AppEnv>) -> Box<Future<Item = HttpResponse, Error = Error>> {
-    Box::new(future::ok(HttpResponse::NotImplemented().finish()))
+pub fn index(_req: &HttpRequest<AppEnv>) -> impl Responder {
+    HttpResponse::NotImplemented()
 }
 
 ///// Get object from bucket
