@@ -111,8 +111,8 @@ fn main() {
                 r.method(http::Method::DELETE).f(routes::delete_object);
                 r.method(http::Method::from_bytes(b"COPY").unwrap())
                     .f(routes::copy_object);
-//                r.method(http::Method::from_bytes(b"MOVE").unwrap())
-//                    .f(routes::move_object);
+                r.method(http::Method::from_bytes(b"MOVE").unwrap())
+                    .f(routes::move_object);
             })
     }).bind(&bind_port)
         .expect(&format!("Cannot bind to {}", &bind_port))
