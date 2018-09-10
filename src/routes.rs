@@ -284,89 +284,89 @@ pub fn put_object(req: &HttpRequest<AppEnv>) -> Box<Future<Item=HttpResponse, Er
                 CreateMultipartUploadError::Unknown(e) => ErrorInternalServerError(e),
             })
             .and_then(move |upload| {
-                upload_parts(body_stream, state.to_owned(), &upload).then(move |parts_r| match parts_r {
-                    Ok(parts) => {
-                        let c: Box<Future<Item=HttpResponse, Error=Error>>;
+                upload_parts(body_stream, state.to_owned(), &upload)
+                    .then(move |parts_r| match parts_r {
+                        Ok(parts) => {
+                            let c: Box<Future<Item=HttpResponse, Error=Error>>;
 
-                        if parts.is_empty() {
-                            // no parts upload - file is empty
-                            c = Box::new(
-                                abort_upload(&state, &upload)
-                                    .then(move |_| {
-                                        state
-                                            .s3
-                                            .put_object(&PutObjectRequest {
-                                                bucket: bucket,
-                                                key: key,
-                                                body: Some(vec![]),
-                                                cache_control: cache_control.to_owned(),
-                                                content_disposition: content_disposition
-                                                    .to_owned(),
-                                                content_encoding: content_encoding.to_owned(),
-                                                content_language: content_language.to_owned(),
-                                                content_type: content_type.to_owned(),
-                                                expires: expires.to_owned(),
-                                                ..PutObjectRequest::default()
-                                            })
-                                            .map_err(|e| match e {
-                                                PutObjectError::HttpDispatch(e) => {
-                                                    ErrorInternalServerError(e)
-                                                }
-                                                PutObjectError::Credentials(e) => {
-                                                    ErrorForbidden(e)
-                                                }
-                                                PutObjectError::Validation(e) => {
-                                                    ErrorBadRequest(e)
-                                                }
-                                                PutObjectError::Unknown(e) => {
-                                                    ErrorInternalServerError(e)
-                                                }
-                                            })
-                                    })
-                                    .map(|_| HttpResponse::Ok().finish()),
-                            );
-                        } else {
-                            c = Box::new(
-                                complete_upload(&state, &upload, parts)
-                                    .map_err(|e| match e {
-                                        CompleteMultipartUploadError::HttpDispatch(e) => {
-                                            ErrorInternalServerError(e)
-                                        }
-                                        CompleteMultipartUploadError::Credentials(e) => {
-                                            ErrorForbidden(e)
-                                        }
-                                        CompleteMultipartUploadError::Validation(e) => {
-                                            ErrorBadRequest(e)
-                                        }
-                                        CompleteMultipartUploadError::Unknown(e) => {
-                                            ErrorInternalServerError(e)
-                                        }
-                                    })
-                                    .map(|_| HttpResponse::Ok().finish()),
-                            );
+                            if parts.is_empty() {
+                                // no parts upload - file is empty
+                                c = Box::new(
+                                    abort_upload(&state, &upload)
+                                        .then(move |_| {
+                                            state
+                                                .s3
+                                                .put_object(&PutObjectRequest {
+                                                    bucket: bucket,
+                                                    key: key,
+                                                    body: Some(vec![]),
+                                                    cache_control: cache_control.to_owned(),
+                                                    content_disposition: content_disposition.to_owned(),
+                                                    content_encoding: content_encoding.to_owned(),
+                                                    content_language: content_language.to_owned(),
+                                                    content_type: content_type.to_owned(),
+                                                    expires: expires.to_owned(),
+                                                    ..PutObjectRequest::default()
+                                                })
+                                                .map_err(|e| match e {
+                                                    PutObjectError::HttpDispatch(e) => {
+                                                        ErrorInternalServerError(e)
+                                                    }
+                                                    PutObjectError::Credentials(e) => {
+                                                        ErrorForbidden(e)
+                                                    }
+                                                    PutObjectError::Validation(e) => {
+                                                        ErrorBadRequest(e)
+                                                    }
+                                                    PutObjectError::Unknown(e) => {
+                                                        ErrorInternalServerError(e)
+                                                    }
+                                                })
+                                        })
+                                        .map(|_| HttpResponse::Ok().finish()),
+                                );
+                            } else {
+                                c = Box::new(
+                                    complete_upload(&state, &upload, parts)
+                                        .map_err(|e| match e {
+                                            CompleteMultipartUploadError::HttpDispatch(e) => {
+                                                ErrorInternalServerError(e)
+                                            }
+                                            CompleteMultipartUploadError::Credentials(e) => {
+                                                ErrorForbidden(e)
+                                            }
+                                            CompleteMultipartUploadError::Validation(e) => {
+                                                ErrorBadRequest(e)
+                                            }
+                                            CompleteMultipartUploadError::Unknown(e) => {
+                                                ErrorInternalServerError(e)
+                                            }
+                                        })
+                                        .map(|_| HttpResponse::Ok().finish()),
+                                );
+                            }
+
+                            c
                         }
+                        Err(e) => {
+                            let c: Box<Future<Item=HttpResponse, Error=Error>> = Box::new(
+                                abort_upload(&state, &upload)
+                                    .map(|_| HttpResponse::Ok().finish())
+                                    .then(|_| {
+                                        Err(match e {
+                                            UploadPartError::HttpDispatch(e) => {
+                                                ErrorInternalServerError(e)
+                                            }
+                                            UploadPartError::Credentials(e) => ErrorForbidden(e),
+                                            UploadPartError::Validation(e) => ErrorBadRequest(e),
+                                            UploadPartError::Unknown(e) => ErrorInternalServerError(e),
+                                        })
+                                    }),
+                            );
 
-                        c
-                    }
-                    Err(e) => {
-                        let c: Box<Future<Item=HttpResponse, Error=Error>> = Box::new(
-                            abort_upload(&state, &upload)
-                                .map(|_| HttpResponse::Ok().finish())
-                                .then(|_| {
-                                    Err(match e {
-                                        UploadPartError::HttpDispatch(e) => {
-                                            ErrorInternalServerError(e)
-                                        }
-                                        UploadPartError::Credentials(e) => ErrorForbidden(e),
-                                        UploadPartError::Validation(e) => ErrorBadRequest(e),
-                                        UploadPartError::Unknown(e) => ErrorInternalServerError(e),
-                                    })
-                                }),
-                        );
-
-                        c
-                    }
-                })
+                            c
+                        }
+                    })
             })
             .map(|_| HttpResponse::Ok().finish()),
     );
