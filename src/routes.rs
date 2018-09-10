@@ -34,7 +34,7 @@ pub fn index(_req: &HttpRequest<AppEnv>) -> impl Responder {
 pub fn get_object(req: &HttpRequest<AppEnv>) -> impl Responder {
     req.state()
         .s3
-        .get_object(&GetObjectRequest {
+        .get_object(GetObjectRequest {
             bucket: extract_bucket(&req),
             key: extract_object_key(&req),
             ..GetObjectRequest::default()
@@ -96,7 +96,7 @@ pub fn get_object(req: &HttpRequest<AppEnv>) -> impl Responder {
 pub fn head_object(req: &HttpRequest<AppEnv>) -> Box<Future<Item=HttpResponse, Error=Error>> {
     req.state()
         .s3
-        .head_object(&HeadObjectRequest {
+        .head_object(HeadObjectRequest {
             bucket: extract_bucket(&req),
             key: extract_object_key(&req),
             ..HeadObjectRequest::default()
@@ -191,12 +191,12 @@ fn upload_parts(
                     Box::new(
                         state
                             .s3
-                            .upload_part(&UploadPartRequest {
+                            .upload_part(UploadPartRequest {
                                 bucket: bucket.to_owned(),
                                 key: key.to_owned(),
                                 upload_id: upload_id.to_owned(),
                                 part_number: part_number.to_owned(),
-                                body: Some(data),
+                                body: Some(StreamingBody::from(data)),
                                 ..UploadPartRequest::default()
                             })
                             .map(move |output| {
@@ -220,7 +220,7 @@ fn complete_upload(
 ) -> Box<Future<Item=CompleteMultipartUploadOutput, Error=CompleteMultipartUploadError>> {
     Box::new(
         env.s3
-            .complete_multipart_upload(&CompleteMultipartUploadRequest {
+            .complete_multipart_upload(CompleteMultipartUploadRequest {
                 bucket: upload.bucket.to_owned().unwrap(),
                 key: upload.key.to_owned().unwrap(),
                 multipart_upload: Some(CompletedMultipartUpload { parts: Some(parts) }),
@@ -234,7 +234,7 @@ fn abort_upload(
     env: &AppEnv,
     upload: &CreateMultipartUploadOutput,
 ) -> Box<Future<Item=AbortMultipartUploadOutput, Error=AbortMultipartUploadError>> {
-    Box::new(env.s3.abort_multipart_upload(&AbortMultipartUploadRequest {
+    Box::new(env.s3.abort_multipart_upload(AbortMultipartUploadRequest {
         bucket: upload.bucket.to_owned().unwrap(),
         key: upload.key.to_owned().unwrap(),
         request_payer: None,
@@ -266,7 +266,7 @@ pub fn put_object(req: &HttpRequest<AppEnv>) -> Box<Future<Item=HttpResponse, Er
     return Box::new(
         state
             .s3
-            .create_multipart_upload(&CreateMultipartUploadRequest {
+            .create_multipart_upload(CreateMultipartUploadRequest {
                 bucket: bucket.to_owned(),
                 key: key.to_owned(),
                 cache_control: cache_control.to_owned(),
@@ -296,10 +296,10 @@ pub fn put_object(req: &HttpRequest<AppEnv>) -> Box<Future<Item=HttpResponse, Er
                                         .then(move |_| {
                                             state
                                                 .s3
-                                                .put_object(&PutObjectRequest {
+                                                .put_object(PutObjectRequest {
                                                     bucket: bucket,
                                                     key: key,
-                                                    body: Some(vec![]),
+                                                    body: Some(StreamingBody::from(vec![])),
                                                     cache_control: cache_control.to_owned(),
                                                     content_disposition: content_disposition.to_owned(),
                                                     content_encoding: content_encoding.to_owned(),
@@ -375,7 +375,7 @@ pub fn put_object(req: &HttpRequest<AppEnv>) -> Box<Future<Item=HttpResponse, Er
 pub fn delete_object(req: &HttpRequest<AppEnv>) -> impl Responder {
     req.state()
         .s3
-        .delete_object(&DeleteObjectRequest {
+        .delete_object(DeleteObjectRequest {
             bucket: extract_bucket(&req),
             key: extract_object_key(&req),
             ..DeleteObjectRequest::default()
@@ -417,7 +417,7 @@ pub fn copy_object(req: &HttpRequest<AppEnv>) -> Box<Future<Item=HttpResponse, E
         Ok(dest) => {
             state
                 .s3
-                .copy_object(&CopyObjectRequest {
+                .copy_object(CopyObjectRequest {
                     bucket: bucket.clone(),
                     copy_source: util::encode_key(format!("{}/{}", bucket, source_key)),
                     key: dest,
@@ -447,7 +447,7 @@ pub fn move_object(req: &HttpRequest<AppEnv>) -> impl Responder {
         .and_then(move |_| {
             state
                 .s3
-                .delete_object(&DeleteObjectRequest {
+                .delete_object(DeleteObjectRequest {
                     bucket: bucket,
                     key: source_key,
                     ..DeleteObjectRequest::default()
