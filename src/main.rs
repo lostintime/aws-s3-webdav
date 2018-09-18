@@ -10,7 +10,6 @@ extern crate log;
 extern crate rusoto_core;
 extern crate rusoto_credential;
 extern crate rusoto_s3;
-extern crate tokio_core;
 extern crate toml;
 
 mod routes;
@@ -103,7 +102,7 @@ fn main() {
         });
 
         App::with_state(Arc::new(state))
-            .resource("/", |r| r.route().f(routes::index))
+            .resource("/", |r| r.f(routes::index))
             .default_resource(move |r| {
                 r.method(http::Method::GET).f(routes::get_object);
                 r.method(http::Method::HEAD).f(routes::head_object);

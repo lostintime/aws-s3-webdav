@@ -1,6 +1,5 @@
 use rusoto_core::Region;
 use rusoto_s3::*;
-use rusoto_core::{reactor::CredentialsProvider, reactor::RequestDispatcher};
 
 pub struct AwsConfig {
     pub region: Region,
@@ -38,18 +37,14 @@ pub struct AppConfig {
 
 /// Application State (environment)
 pub struct AppState {
-    pub s3: S3Client<CredentialsProvider, RequestDispatcher>,
+    pub s3: S3Client,
     pub config: AppConfig,
 }
 
 impl AppState {
     pub fn new(config: AppConfig) -> AppState {
         AppState {
-            s3: S3Client::new(
-                RequestDispatcher::default(),
-                CredentialsProvider::default(),
-                config.aws.region.to_owned(),
-            ),
+            s3: S3Client::new(config.aws.region.to_owned()),
             config: config,
         }
     }
