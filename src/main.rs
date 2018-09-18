@@ -10,7 +10,6 @@ extern crate log;
 extern crate rusoto_core;
 extern crate rusoto_credential;
 extern crate rusoto_s3;
-extern crate tokio_core;
 extern crate toml;
 
 mod routes;
