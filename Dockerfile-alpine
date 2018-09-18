@@ -1,5 +1,5 @@
 # Build the app
-FROM ekidd/rust-musl-builder:1.25.0 as builder
+FROM ekidd/rust-musl-builder:1.28.0 as builder
 
 WORKDIR /home/rust/src
 

@@ -1,5 +1,5 @@
 # Build the app
-FROM rust:1.25.0 as builder
+FROM rust:1.28.0 as builder
 
 WORKDIR /app
 COPY . .
